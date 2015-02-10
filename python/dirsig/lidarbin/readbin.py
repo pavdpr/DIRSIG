@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 
 """ Reads a DIRSIG lidar "bin" file
@@ -53,87 +53,33 @@ import struct  # for convertint data types
 import zlib    # for decompression
 
 
-def printbinfile(data, tab=0):
-    """Prints a bin file
-
-    Keyword arguments:
-    data -- the bin file to print
-    tab  -- the number of tabs to use
-
-    Returns:
-    None
-
-    """
-
-    def printmatrix(matrix, tab):
-        """Prints a numpy.matrix with tabs
-
-        Keyword arguments:
-        matrix -- the matrix to print
-        tab    -- the number of tabs to use
-
-        Returns:
-        None
-
-        """
-
-        for i in range(matrix.shape[0]):
-            print tab * '\t', matrix[i, :]
-        return
-
-    if type(data) is dict:
-        keys = data.keys()
-        for key in sorted(keys):
-            if type(data[key]) is dict:
-                print tab * '\t' + key + ':'
-                printbinfile(data[key], tab + 1)
-            elif type(data[key]) is list:
-                print tab * '\t' + key + ':'
-                printbinfile(data[key], tab + 1)
-            elif type(data[key]) is numpy.matrixlib.defmatrix.matrix:
-                print tab * '\t' + key + ':'
-                printmatrix(data[key], tab + 1)
-            elif type(data[key]) is numpy.ndarray:
-                print tab * '\t' + key + ':', type(data[key]), 'shape:', \
-                    data[key].shape
-                #print data[key]
-            else:
-                print tab * '\t' + key + ':', data[key]
-    elif type(data) is list:
-        for item in data:
-            printbinfile(item, tab)
-    else:
-        print type(data)
-    return
-
-
-
-def readDirsigBin(filename, isMac32=False):
+def readbin(filename, is32bit=False):
     """Reads a DIRSIG bin file
 
     Keyword arguments:
     filename -- a string containing the file to read
-    isMac32  -- a bool if DIRSIG was compiled on a 32 bit system. (default = False).
-                flag to tell the code to use 32 long longs for the pulse data bytes
-                field. In version 2 or later of the bin file, this was guarrenteed
-                to be 64 bits in of the bin file and will have no effect on the
-                data parsing.
+    is32bit  -- a bool if DIRSIG was compiled on a 32 bit system. (default =
+                False). Tells the code to use 32 long longs for the pulse data
+                bytes field. In version 2 or later of the bin file, this was
+                guarrenteed to be 64 bits in of the bin file and this flag will
+                have no effect on the data parsing.
 
     Returns:
     dict
 
     """
 
-    def readPulse(fid, version, endian, xPixelCt, yPixelCt, isMac32):
+    # define helper functions
+    def readpulse(fid, version, endian, xpixelct, ypixelct, is32bit):
         """Reads a pulse from a DIRSIG bin file
 
         Keyword arguments:
         fid      -- the file id to read a pulse from
         version  -- the version of the bin file
         endian   -- the endian of the data
-        xPixelCt -- the number of pixels in the x direction
-        yPixelCt -- the number of pixels in the y direction
-        isMac32  -- a bool if DIRSIG was compiled on a 32 bit system. (default = False)
+        xpixelct -- the number of pixels in the x direction
+        ypixelct -- the number of pixels in the y direction
+        is32bit  -- a bool if DIRSIG was compiled on a 32 bit system.
 
         Returns:
         dict
@@ -160,10 +106,11 @@ def readDirsigBin(filename, isMac32=False):
         header['platform rotation'] = numpy.mat(struct.unpack(endian + 3 * 'd', \
             fid.read(24)))
         if version > 1:
-            # todo: Check reshaping was done right
+            # pylint: disable=E1103
             header['transmitter to mount affine'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
+            # pylint: enable=E1103
         else:
             header['transmitter mount pointing offset'] = \
                 numpy.mat(struct.unpack(endian + 3 * 'd', \
@@ -173,12 +120,14 @@ def readDirsigBin(filename, isMac32=False):
                 numpy.mat(struct.unpack(endian + 3 * 'd', \
                 fid.read(24)))
         if version > 1:
+            # pylint: disable=E1103
             header['transmitter mount to platform affine'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
             header['receiver to mount affine'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
+            # pylint: enable=E1103
         else:
             header['receiver mount pointing offset'] = \
                 numpy.mat(struct.unpack(endian + 3 * 'd', \
@@ -188,9 +137,11 @@ def readDirsigBin(filename, isMac32=False):
                 numpy.mat(struct.unpack(endian + 3 * 'd', \
                 fid.read(24)))
         if version > 1:
+            # pylint: disable=E1103
             header['receiver mount to platform affine'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
+            # pylint: enable=E1103
         header['pulse data type'] = struct.unpack(endian + 'I', \
             fid.read(4))[0] # should always be 5 (double)
         header['data compression type'] = struct.unpack(endian + 'B', \
@@ -201,19 +152,21 @@ def readDirsigBin(filename, isMac32=False):
             header['delta histogram flag'] = struct.unpack(endian + 'B', \
                 fid.read(1))[0]
         # check for bug where a long may be 32 bits on some systems and 64 on others
-        if isMac32 and (version < 2):
+        if is32bit and (version < 2):
             header['pulse data bytes'] = struct.unpack(endian + 'I', \
                 fid.read(4))[0]
         else:
             header['pulse data bytes'] = struct.unpack(endian + 'Q', \
                 fid.read(8))[0]
         if version > 1:
+            # pylint: disable=E1103
             header['system transmit mueller matrix'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
             header['system receive mueller matrix'] = \
                 numpy.mat(struct.unpack(endian + 16 * 'd', \
                 fid.read(128))).reshape((4, 4))
+            # pylint: enable=E1103
         output['header'] = header
 
         # read the data
@@ -221,26 +174,28 @@ def readDirsigBin(filename, isMac32=False):
         if header['data compression type'] == 1:
             tmp = zlib.decompress(tmp)
 
-        tmp = struct.unpack(xPixelCt * yPixelCt * header['samples per time bin'] * \
+        tmp = struct.unpack(xpixelct * ypixelct * header['samples per time bin'] * \
             (header['time gate bin count'] + 1) * 'd', tmp)
 
-        output['data'] = numpy.reshape(numpy.array(tmp), (xPixelCt, \
-            yPixelCt, header['samples per time bin'] * \
+        # pylint: disable=E1103
+        output['data'] = numpy.reshape(numpy.array(tmp), (xpixelct, \
+            ypixelct, header['samples per time bin'] * \
             (header['time gate bin count'] + 1)))
+        # pylint: enable=E1103
 
         return output
 
 
-    def readTask(fid, version, endian, xPixelCt, yPixelCt, isMac32):
+    def readtask(fid, version, endian, xpixelct, ypixelct, is32bit):
         """Reads a pulse from a DIRSIG bin file
 
         Keyword arguments:
         fid      -- the file id to read a pulse from
         version  -- the version of the bin file
         endian   -- the endian of the data
-        xPixelCt -- the number of pixels in the x direction
-        yPixelCt -- the number of pixels in the y direction
-        isMac32  -- a bool if DIRSIG was compiled on a 32 bit system. (default = False)
+        xpixelct -- the number of pixels in the x direction
+        ypixelct -- the number of pixels in the y direction
+        is32bit  -- a bool if DIRSIG was compiled on a 32 bit system.
 
         Returns:
         dict
@@ -263,9 +218,9 @@ def readDirsigBin(filename, isMac32=False):
             fid.read(8))[0]
         header['pulse count'] = struct.unpack(endian + 'I', fid.read(4))[0]
         output['header'] = header
-        for p in range(header['pulse count']):
-            output['pulses'].append(readPulse(fid, version, endian, xPixelCt, \
-                yPixelCt, isMac32))
+        for dummypulse in range(header['pulse count']):
+            output['pulses'].append(readpulse(fid, version, endian, xpixelct, \
+                ypixelct, is32bit))
         return output
 
 
@@ -321,145 +276,34 @@ def readDirsigBin(filename, isMac32=False):
 
         output['header'] = header
 
-        for t in range(header['task count']):
-            output['tasks'].append(readTask(fid, _version, endian, \
-                header['x pixel count'], header['y pixel count'], isMac32))
+        for dummytask in range(header['task count']):
+            output['tasks'].append(readtask(fid, _version, endian, \
+                header['x pixel count'], header['y pixel count'], is32bit))
 
-    except RuntimeError, e:
-        sys.stderr.write('ERROR: #s\n' % str(e))
+    except RuntimeError, error:
+        sys.stderr.write('ERROR: #s\n' % str(error))
     finally:
         fid.close()
 
     return output
 
 
-def getPassiveTerm(binData):
-    """Returns the passive term for each pulse of a bin file
-
-    Keyword arguments:
-    binData -- the bin file
-
-    Returns:
-    dict
-
-    """
-
-    output = []
-    for task in binData['tasks']:
-        taskData = []
-        for pulse in task['pulses']:
-            taskData.append(pulse['data'][:, :, 0])
-        output.append(taskData)
-    return output
-
-
-def getActiveTerm(binData):
-    """Returns the active term for each pulse of a bin file
-
-    Keyword arguments:
-    binData -- the bin file
-
-    Returns:
-    dict
-
-    """
-    output = []
-    for task in binData['tasks']:
-        taskData = []
-        for pulse in task['pulses']:
-            taskData.append(pulse['data'][:, :, 1:])
-        output.append(taskData)
-    return output
-
-
-def getTimeBinWidth(timeGateStart, timeGateStop, timeGateBinCount):
-    """returns the width of a time bin in seconds
-
-    Keyword arguments:
-    timeGateStart    -- the time in seconds to open the range gate
-    timeGateStop     -- the time in seconds to close the range gate
-    timeGateBinCount -- the number of time bins
-
-    Returns:
-    float
-
-    """
-    if timeGateBinCount == 1:
-        return timeGateStop - timeGateStart
-    else:
-        return (timeGateStop - timeGateStart) / float(timeGateBinCount - 1)
-
-
-def packedBin2Signal(active, passive, timeBinWidth):
-    """returns the waveform signal for a single waveform
-
-    Keyword arguments:
-    active       -- the active term (n x m x p numpy.array)
-    passive      -- the passive term (n x m x 1 numpy.array)
-    timeBinWidth -- the width of a time bin in seconds
-
-    Returns:
-    numpy.array
-
-    """
-    shape = active.shape
-
-    # normalize the passive term by the time bin width in seconds
-    passive = numpy.repeat(numpy.reshape(passive, (shape[0], shape[1], 1)), \
-        shape[2], axis=2) * timeBinWidth
-
-    return active + passive
-
-
-def getSignal(bindata):
-    """Returns the signal for all waveforms
-
-    Keyword arguments:
-    binData -- the bin file
-
-    Returns:
-    dict
-
-    """
-    output = []
-    for task in bindata['tasks']:
-        taskdata = []
-        for pulse in task['pulses']:
-            timebinwidth = getTimeBinWidth(pulse['header']['time gate start'], \
-                pulse['header']['time gate stop'], \
-                pulse['header']['time gate bin count'])
-            taskdata.append(packedBin2Signal(pulse['data'][:, :, 1:], \
-                pulse['data'][:, :, 0], timebinwidth))
-        output.append(taskdata)
-    return output
-
-
-def getBinRange(bindata):
-    """Returns the range in meters for each bin of each pulse
-
-    Keyword arguments:
-    binData -- the bin file
-
-    Returns:
-    dict
-
-    """
-
-    cd2 = 299792458. / 2.0 # speed of light over 2
-    output = []
-    for task in bindata['tasks']:
-        taskdata = []
-        for pulse in task['pulses']:
-            taskdata.append(numpy.linspace(\
-                pulse['header']['time gate start'] * cd2, \
-                pulse['header']['time gate stop'] * cd2, \
-                pulse['header']['time gate bin count']))
-
-    return output
 
 if __name__ == '__main__':
-    Args = sys.argv[1:]
-    if Args:
-        filename = "\\ ".join(Args)
+    ARGS = sys.argv[1:]
+    if ARGS:
+        FILENAME = "\\ ".join(ARGS)
 
-        printbinfile(readDirsigBin(filename))
+        BINFILE = readbin(FILENAME)
+
+        TASKCT = 0
+        PULSECT = 0
+
+        for dummytask in BINFILE['tasks']:
+            TASKCT += 1
+            for dummypulse in dummytask['pulses']:
+                PULSECT += 1
+
+        print FILENAME + ' contains:'
+        print '\t' + str(TASKCT) + ' tasks'
+        print '\t' + str(PULSECT) + ' pulses'
