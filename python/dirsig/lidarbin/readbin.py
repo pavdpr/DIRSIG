@@ -9,12 +9,12 @@ Description:
 
 Usage:
     To read a bin file:
-        binfile = readDirsigBin(filename)
-        binfile = readDirsigBin(filename, True)
-    To get the true signals:
-        signal = getSignal( binfile )
-    To get the range of each time bin for each pulse:
-    	range = getBinRange( binfile )
+        For most cases:
+            binfile = readDirsigBin(filename)
+
+        If dirsig was compiled on a 32 bit system and the bin file is version
+        0 or 1:
+            binfile = readDirsigBin(filename, True)
 
 External Dependancies:
 	numpy
@@ -40,7 +40,7 @@ References:
 __author__ = "Paul Romanczyk"
 __copyright__ = "Copyright 2015, Rochester Institute of Technology"
 __credits__ = []
-#__license__ = "GPL"
+__license__ = "MIT"
 #__version__ = "1.0.1"
 __maintainer__ = "Paul Romanczyk"
 __email__ = "par4249@rit.edu"
@@ -54,35 +54,52 @@ import zlib    # for decompression
 
 
 def readbin(filename, is32bit=False):
-    """Reads a DIRSIG bin file
+    """Reads a DIRSIG bin file.
 
-    Keyword arguments:
-    filename -- a string containing the file to read
-    is32bit  -- a bool if DIRSIG was compiled on a 32 bit system. (default =
-                False). Tells the code to use 32 long longs for the pulse data
-                bytes field. In version 2 or later of the bin file, this was
-                guarrenteed to be 64 bits in of the bin file and this flag will
-                have no effect on the data parsing.
+    Args:
+        filename (str): A string containing the file to read.
+        is32bit (bool, optional): Set to True if DIRSIG was compiled on a 32 bit
+            system. This tells the code to use 32 bit long longs for the pulse 
+            data bytes field. In version 2 or later of the bin file, this was 
+            guaranteed to be 64 bits in of the bin file and this flag will have 
+            no effect on the data parsing. The default is False.
 
     Returns:
-    dict
+        A dictionary containing two keys: 'header' and 'tasks'. output['header']
+        is a dictionary containing the file header. For output['tasks'] is a list
+        containing dictionaries. Let task = output['tasks'][i], be the ith task.
+        task['header'] is a dictionary containing the task header. task['pulses']
+        is a list of dictionaries containing the pulses. Let task['pulses'][j] be
+        the jth pulse of the task. pulse['header'] is a dict containing the pulse
+        header. pulse['data'] is a numpy.array contating the return information.
+        The contents of the header files will depend on the version of the bin
+        file that is being read. See [1] for more details.
+
+        output = {'header': dict, 'tasks': list}
+        output['tasks'][i] = {'header': dict, 'pulses': list}
+        output['tasks'][i]['pulses'][j] = {'header': dict, 'data': numpy.array}
+
+        The 0th time bin of the pulse data is the passive term, the remaining
+        bands are the active time part of the signal.
 
     """
 
     # define helper functions
     def readpulse(fid, version, endian, xpixelct, ypixelct, is32bit):
-        """Reads a pulse from a DIRSIG bin file
+        """Reads a pulse from a DIRSIG bin file.
 
-        Keyword arguments:
-        fid      -- the file id to read a pulse from
-        version  -- the version of the bin file
-        endian   -- the endian of the data
-        xpixelct -- the number of pixels in the x direction
-        ypixelct -- the number of pixels in the y direction
-        is32bit  -- a bool if DIRSIG was compiled on a 32 bit system.
+        Args:
+            fid (file): The file id to read a pulse from.
+            version (int): The version of the bin file.
+            endian (str): The endian of the data. 
+            xpixelct (int): the number of pixels in the x direction
+            ypixelct (int): the number of pixels in the y direction
+            is32bit (bool): a bool if DIRSIG was compiled on a 32 bit system.
 
         Returns:
-        dict
+            A dictionary containing the pulse data. This has two keys: 'header',
+            a dictionary containing the pulse header; and 'data', a numpy.array
+            containing the data for the pulse.
 
         """
 
@@ -187,18 +204,20 @@ def readbin(filename, is32bit=False):
 
 
     def readtask(fid, version, endian, xpixelct, ypixelct, is32bit):
-        """Reads a pulse from a DIRSIG bin file
+        """Reads a task from a DIRSIG bin file.
 
-        Keyword arguments:
-        fid      -- the file id to read a pulse from
-        version  -- the version of the bin file
-        endian   -- the endian of the data
-        xpixelct -- the number of pixels in the x direction
-        ypixelct -- the number of pixels in the y direction
-        is32bit  -- a bool if DIRSIG was compiled on a 32 bit system.
+        Args:
+            fid (file): The file id to read a pulse from.
+            version (int): The version of the bin file.
+            endian (str): The endian of the data. 
+            xpixelct (int): the number of pixels in the x direction
+            ypixelct (int): the number of pixels in the y direction
+            is32bit (bool): a bool if DIRSIG was compiled on a 32 bit system.
 
         Returns:
-        dict
+            A dictionary containing the task data. This has two keys: 'header',
+            a dictionary containing the task header; and 'pulses', a list of
+            dictionaries, each containing a pulse.
 
         """
         output = {}
