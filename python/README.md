@@ -1,7 +1,7 @@
 # Python Scripts
-A collection of DIRSIG related python scripts
+A collection of DIRSIG related python scripts.
 
-### readDirsigBin
+### lidarbin
 Reads a DIRSIG bin (raw Lidar) file into python.
 See http://dirsig.org/docs/new/bin.html for bin file specifications.
 
