@@ -1,3 +1,3 @@
 __all__ = ['parallel']
 
-from parallel import parallel
+from parallel import *
