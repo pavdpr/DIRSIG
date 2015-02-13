@@ -59,9 +59,9 @@ def readbin(filename, is32bit=False):
     Args:
         filename (str): A string containing the file to read.
         is32bit (bool, optional): Set to True if DIRSIG was compiled on a 32 bit
-            system. This tells the code to use 32 bit long longs for the pulse 
-            data bytes field. In version 2 or later of the bin file, this was 
-            guaranteed to be 64 bits in of the bin file and this flag will have 
+            system. This tells the code to use 32 bit long longs for the pulse
+            data bytes field. In version 2 or later of the bin file, this was
+            guaranteed to be 64 bits in of the bin file and this flag will have
             no effect on the data parsing. The default is False.
 
     Returns:
@@ -91,7 +91,7 @@ def readbin(filename, is32bit=False):
         Args:
             fid (file): The file id to read a pulse from.
             version (int): The version of the bin file.
-            endian (str): The endian of the data. 
+            endian (str): The endian of the data.
             xpixelct (int): the number of pixels in the x direction
             ypixelct (int): the number of pixels in the y direction
             is32bit (bool): a bool if DIRSIG was compiled on a 32 bit system.
@@ -209,7 +209,7 @@ def readbin(filename, is32bit=False):
         Args:
             fid (file): The file id to read a pulse from.
             version (int): The version of the bin file.
-            endian (str): The endian of the data. 
+            endian (str): The endian of the data.
             xpixelct (int): the number of pixels in the x direction
             ypixelct (int): the number of pixels in the y direction
             is32bit (bool): a bool if DIRSIG was compiled on a 32 bit system.

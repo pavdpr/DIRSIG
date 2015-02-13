@@ -37,8 +37,8 @@ import numpy
 
 
 
-def printbinfile(data, tab=0):
-    """Prints a bin file. 
+def print_bin_file(data, tab=0):
+    """Prints a bin file.
 
     This prints the contents of a bin file. This is mostly used for debugging.
 
@@ -76,10 +76,10 @@ def printbinfile(data, tab=0):
         for key in sorted(keys):
             if type(data[key]) is dict:
                 print tab * '\t' + key + ':'
-                printbinfile(data[key], tab + 1)
+                print_bin_file(data[key], tab + 1)
             elif type(data[key]) is list:
                 print tab * '\t' + key + ':'
-                printbinfile(data[key], tab + 1)
+                print_bin_file(data[key], tab + 1)
             elif type(data[key]) is numpy.matrixlib.defmatrix.matrix:
                 print tab * '\t' + key + ':'
                 print_matrix(data[key], tab + 1)
@@ -91,13 +91,13 @@ def printbinfile(data, tab=0):
                 print tab * '\t' + key + ':', data[key]
     elif type(data) is list:
         for item in data:
-            printbinfile(item, tab)
+            print_bin_file(item, tab)
     else:
         print type(data)
     return
 
 
-def getPassiveTerm(bin_data):
+def get_passive_term(bin_data):
     """Returns the passive term for each pulse of a bin file.
 
     Args:
@@ -111,14 +111,14 @@ def getPassiveTerm(bin_data):
 
     output = []
     for task in bin_data['tasks']:
-        taskData = []
+        task_data = []
         for pulse in task['pulses']:
-            taskData.append(pulse['data'][:, :, 0])
-        output.append(taskData)
+            task_data.append(pulse['data'][:, :, 0])
+        output.append(task_data)
     return output
 
 
-def getActiveTerm(bin_data):
+def get_active_term(bin_data):
     """Returns the active term for each pulse of a bin file.
 
     Args:
@@ -131,44 +131,44 @@ def getActiveTerm(bin_data):
     """
     output = []
     for task in bin_data['tasks']:
-        taskData = []
+        task_data = []
         for pulse in task['pulses']:
-            taskData.append(pulse['data'][:, :, 1:])
-        output.append(taskData)
+            task_data.append(pulse['data'][:, :, 1:])
+        output.append(task_data)
     return output
 
 
-def getTimeBinWidth(timeGateStart, timeGateStop, timeGateBinCount):
+def get_time_bin_width(time_gate_start, time_gate_stop, time_gate_bin_count):
     """Returns the width of a time bin in seconds.
 
     Args:
-        timeGateStart (float): The time in seconds to open the range gate.
-        timeGateStop (float): The time in seconds to close the range gate.
-        timeGateBinCount (int): The number of time bins.
+        time_gate_start (float): The time in seconds to open the range gate.
+        time_gate_stop (float): The time in seconds to close the range gate.
+        time_gate_bin_count (int): The number of time bins.
 
     Returns:
         A float containing thw width of a time bin in seconds.
 
     """
-    if timeGateBinCount == 1:
-        return timeGateStop - timeGateStart
+    if time_gate_bin_count == 1:
+        return time_gate_stop - time_gate_start
     else:
-        return (timeGateStop - timeGateStart) / float(timeGateBinCount - 1)
+        return (time_gate_stop - time_gate_start) / float(time_gate_bin_count - 1)
 
 
-def packedBin2Signal(active, passive, timeBinWidth):
+def packed_bin_to_signal(active, passive, time_bin_width):
     """Computes the signal for a waveform.
 
     Combines the passive and active terms to compute the signal. The units of the
     active term are photons, the passive term are photons/second, and the time
     bin width is in seconds. The singal can be computed using:
-        signal = active + passive * timeBinWidth
+        signal = active + passive * time_bin_width
 
     Args:
         active (numpy.array): The active term (n x m x p). The units are photons.
         passive (numpy.array): The passive term (n x m x 1 numpy.array). The
             units are photons/second.
-        timeBinWidth (float): The width of a time bin. The units are seconds.
+        time_bin_width (float): The width of a time bin. The units are seconds.
 
     Returns:
         A numpy.array of size n x m x p (same as the active compontent)
@@ -179,12 +179,12 @@ def packedBin2Signal(active, passive, timeBinWidth):
 
     # normalize the passive term by the time bin width in seconds
     passive = numpy.repeat(numpy.reshape(passive, (shape[0], shape[1], 1)), \
-        shape[2], axis=2) * timeBinWidth
+        shape[2], axis=2) * time_bin_width
 
     return active + passive
 
 
-def getSignal(bin_data):
+def get_signal(bin_data):
     """Returns the signal (in photons) for each pulse of a bin file.
 
     Args:
@@ -197,18 +197,18 @@ def getSignal(bin_data):
     """
     output = []
     for task in bin_data['tasks']:
-        taskdata = []
+        task_data = []
         for pulse in task['pulses']:
-            timebinwidth = getTimeBinWidth(pulse['header']['time gate start'], \
+            time_bin_width = get_time_bin_width(pulse['header']['time gate start'], \
                 pulse['header']['time gate stop'], \
                 pulse['header']['time gate bin count'])
-            taskdata.append(packedBin2Signal(pulse['data'][:, :, 1:], \
-                pulse['data'][:, :, 0], timebinwidth))
-        output.append(taskdata)
+            task_data.append(packed_bin_to_signal(pulse['data'][:, :, 1:], \
+                pulse['data'][:, :, 0], time_bin_width))
+        output.append(task_data)
     return output
 
 
-def getBinRange(bin_data):
+def get_bin_range(bin_data):
     """Returns the range in meters for each pulse.
 
     Args:
@@ -224,9 +224,9 @@ def getBinRange(bin_data):
     cd2 = 299792458. / 2.0 # speed of light over 2
     output = []
     for task in bin_data['tasks']:
-        taskdata = []
+        task_data = []
         for pulse in task['pulses']:
-            taskdata.append(numpy.linspace(\
+            task_data.append(numpy.linspace(\
                 pulse['header']['time gate start'] * cd2, \
                 pulse['header']['time gate stop'] * cd2, \
                 pulse['header']['time gate bin count']))
