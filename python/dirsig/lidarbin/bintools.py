@@ -138,24 +138,6 @@ def get_active_term(bin_data):
     return output
 
 
-def get_time_bin_width(time_gate_start, time_gate_stop, time_gate_bin_count):
-    """Returns the width of a time bin in seconds.
-
-    Args:
-        time_gate_start (float): The time in seconds to open the range gate.
-        time_gate_stop (float): The time in seconds to close the range gate.
-        time_gate_bin_count (int): The number of time bins.
-
-    Returns:
-        A float containing thw width of a time bin in seconds.
-
-    """
-    if time_gate_bin_count == 1:
-        return time_gate_stop - time_gate_start
-    else:
-        return (time_gate_stop - time_gate_start) / float(time_gate_bin_count - 1)
-
-
 def packed_bin_to_signal(active, passive, time_bin_width):
     """Computes the signal for a waveform.
 
@@ -199,9 +181,8 @@ def get_signal(bin_data):
     for task in bin_data['tasks']:
         task_data = []
         for pulse in task['pulses']:
-            time_bin_width = get_time_bin_width(pulse['header']['time gate start'], \
-                pulse['header']['time gate stop'], \
-                pulse['header']['time gate bin count'])
+            time_bin_width = pulse['header']['time gate stop'] - \
+                pulse['header']['time gate start']
             task_data.append(packed_bin_to_signal(pulse['data'][:, :, 1:], \
                 pulse['data'][:, :, 0], time_bin_width))
         output.append(task_data)
