@@ -9,5 +9,8 @@ See http://dirsig.org/docs/new/bin.html for bin file specifications.
 A python wrapper for running multiple simulation files in parallel.
 It also provides some basic tools for creating the dirsig calls.
 
+### odb2glist
+A python function for converting a DIRSIG odb file into the newer DIRSIG glist file.
+
 # References:
 http://dirsig.org
