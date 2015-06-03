@@ -50,13 +50,16 @@ HISTORY:
     - Cleaned up command-line interface.
     - Updated documentation.
 
+    2015-06-03: Paul Romanczyk
+    - Updated engine.
+    - Separated components into separate functions.
+    - Added exceptions.
+
     TODO:
-    - Use exceptions for error handling.
     - Allow for the user to choose the output filename.
-    - Add the ability to fully define an instance.
+    - Add the ability to fully define an instance from command line.
         + default is to only populate the non-standard items.
     - Add recursive functionality to convert any sub-odb files to glists.
-    - Split components off into separate functions.
 
 KNOWN ISSUES:
     - This will not work if there are spaces in the filename.
@@ -100,11 +103,11 @@ REFERENCES:
 
 
 # import other packages
-import os                          # for interacting with files and directories
-import re                          # for parsing strings
-import sys                         # for getting command-line input
-import xml.etree.ElementTree as ET # for xml parsing
-import xml.dom.minidom             # for pretty print xml
+import os
+import re
+import sys
+import xml.etree.ElementTree
+import xml.dom.minidom
 
 
 def prettify(elem, indent="  "):
@@ -114,8 +117,8 @@ def prettify(elem, indent="  "):
         Returns a pretty-printed (human-readable) string of the element.
 
     KEYWORD ARGUMENTS:
-        elem (xml.etree.Element): the element (and any children of it) to
-            convert.
+        elem (xml.etree.ElementTree.Element): the element (and any children of
+            it) to convert.
         indent (str, optional): the string containing the indent syntax.
 
     RETURNS:
@@ -132,10 +135,9 @@ def prettify(elem, indent="  "):
         http://pymotw.com/2/xml/etree/ElementTree/create.html
     """
 
-    rough_string = ET.tostring(elem, "utf-8")
+    rough_string = xml.etree.ElementTree.tostring(elem, "utf-8")
     reparsed = xml.dom.minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent=indent)
-
 
 
 def get_right_of_equals(line):
@@ -160,6 +162,700 @@ def get_right_of_equals(line):
     return tmpline
 
 
+def xyz2point(x_loc, y_loc, z_loc):
+    """ Makes a point triplet out of x, y, and z data.
+
+    DESCRIPTION:
+
+    KEYWORD ARGUMENTS:
+        x_loc: the 1st coordinate
+        y_loc: the 2nd coordinate
+        z_loc: the 3rd coordinate
+
+    RETURNS:
+        xml.etree.ElementTree.Element with the name "point" and sub-elements "x",
+        "y", and "z".
+
+    NOTES:
+        x_loc, y_loc, and z_loc only need to be convertable to a str. There are
+        not any checks to see that they are valid point values.
+
+    TODO:
+
+    REFERENCES:
+
+    """
+    point = xml.etree.ElementTree.Element("point")
+    xelem = xml.etree.ElementTree.SubElement(point, "x")
+    xelem.text = str(x_loc).strip()
+    yelem = xml.etree.ElementTree.SubElement(point, "y")
+    yelem.text = str(y_loc).strip()
+    zelem = xml.etree.ElementTree.SubElement(point, "z")
+    zelem.text = str(z_loc).strip()
+    return point
+
+
+def xyz2cartesiantriple(x_loc, y_loc, z_loc):
+    """ Makes a cartesiantriple triplet out of x, y, and z data.
+
+    DESCRIPTION:
+
+    KEYWORD ARGUMENTS:
+        x_loc: the 1st coordinate
+        y_loc: the 2nd coordinate
+        z_loc: the 3rd coordinate
+
+    RETURNS:
+        xml.etree.ElementTree.Element with the name "cartesiantriple" and
+        sub-elements "x", "y", and "z".
+
+    NOTES:
+        x_loc, y_loc, and z_loc only need to be convertable to a str. There are
+        not any checks to see that they are valid cartesiantriple values.
+
+    TODO:
+
+    REFERENCES:
+
+    """
+    cartesiantriple = xml.etree.ElementTree.Element("cartesiantriple")
+    xelem = xml.etree.ElementTree.SubElement(cartesiantriple, "x")
+    xelem.text = str(x_loc).strip()
+    yelem = xml.etree.ElementTree.SubElement(cartesiantriple, "y")
+    yelem.text = str(y_loc).strip()
+    zelem = xml.etree.ElementTree.SubElement(cartesiantriple, "z")
+    zelem.text = str(z_loc).strip()
+    return cartesiantriple
+
+
+def odb_parseinfo(line, lineno, build_all_instances=False):
+    try:
+        if "INFO" not in line:
+            msg = "At line " + str(lineno) + "\n" + \
+                "There should be an INFO here"
+            raise RuntimeError(msg)
+
+        line = get_right_of_equals(line)
+
+        # a dynamic instance controlled by a mov file
+        if ".mov" in line:
+            # we are a dynamic instance
+            # Do I need to worry about ppd files? or is that a glist feature?
+
+            info = xml.etree.ElementTree.Element("dynamicinstance")
+            kfm = xml.etree.ElementTree.SubElement(info, "keyframemovement")
+            filename = xml.etree.ElementTree.SubElement(kfm, "filename")
+            filename.text = line
+
+        # we are either a 9-ple or 16-ple that is comma separated
+        elif "," in line:
+            # separate by comma
+            line = line.split(",")
+
+            # remove whitespace
+            line = [tmp.strip() for tmp in line]
+
+            # check that we are valid (that we have 9 or 16 elements)
+            if len(line) == 9:
+                # we are a 9-ple
+
+                # make a static instance
+                info = xml.etree.ElementTree.Element("staticinstance")
+
+                if (float(line[0]) != 0.0) or (float(line[1]) != 0.0) or \
+                    (float(line[2]) != 0.0) or build_all_instances:
+
+                    # make a translation
+                    translation = xml.etree.ElementTree.SubElement(info, \
+                        "translation")
+                    translation.append(xyz2point(line[0], line[1], line[2]))
+
+                if (float(line[3]) == 0.0) or (float(line[4]) == 0.0) or \
+                    (float(line[5]) == 0.0):
+                    msg = "At line " + str(lineno) + "\n" + \
+                        "glist files only support non-zero scales."
+                    raise RuntimeError(msg)
+
+                elif (float(line[3]) != 1.0) or (float(line[4]) != 1.0) or \
+                    (float(line[5]) != 1.0) or build_all_instances:
+
+                    # make a scale
+                    scale = xml.etree.ElementTree.SubElement(info, "scale")
+                    scale.append(xyz2cartesiantriple(line[3], line[4], line[5]))
+
+                if (float(line[6]) != 0.0) or (float(line[7]) != 0.0) or \
+                    (float(line[8]) != 0.0) or build_all_instances:
+
+                    # make a rotation
+                    rotation = xml.etree.ElementTree.SubElement(info, "rotation")
+                    rotation.append(xyz2cartesiantriple(line[6], line[7], line[8]))
+
+            elif len(line) == 16:
+                # we are a 16-ple
+
+                # make a static instance
+                info = xml.etree.ElementTree.Element("staticinstance")
+
+                # make a matrix
+                matrix = xml.etree.ElementTree.SubElement(info, "matrix")
+                matrix.text = ", ".join(line)
+            else:
+                msg = "At line " + str(lineno) + "\n" + \
+                    "I am not sure how to parse the line.\n" + \
+                    "I was expecting either 9 or 16 comma separated values"
+                raise RuntimeError(msg)
+
+        else:
+            # assume 4x4 affine matrix, split by white space
+            # can I have a space separated 9-ple here?
+            regex = re.compile(r"\s+")
+            tmp = regex.split(line)
+            if len(tmp) != 16:
+                # we expect 16 elements in this line
+                msg = "At line " + str(lineno) + "\n" + \
+                    "I am not sure how to parse the line.\n" + \
+                    "I was expecting either 16 space separated values"
+                raise RuntimeError(msg)
+
+            # convert to xml (requires values be comma separated)
+            # make a static instance
+            info = xml.etree.ElementTree.Element("staticinstance")
+            matrix = xml.etree.ElementTree.SubElement(info, "matrix")
+            matrix.text = ", ".join(tmp)
+        return info
+    except Exception, e:
+        raise
+
+
+def odb_object2glist(odb, lineno, build_all_instances=False):
+    try:
+        if "OBJECT" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a OBJECT.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+        # set up the xml to handle an object
+        obj = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(obj, "basegeometry")
+        units = None
+
+        run = True
+        while run:
+            lineno += 1
+
+            # Should not need this case, probably should remove
+            if lineno >= len(odb):
+                run = False
+
+            # Skip any empty lines
+            elif len(odb[lineno].strip()) == 0:
+                pass
+
+            # stop running if the closing bracket is found
+            elif "}" in odb[lineno]:
+                run = False
+
+            # we have a comment
+            elif "#" in odb[lineno]:
+                # assume we are a comment
+                tmp = odb[lineno]
+                comment = xml.etree.ElementTree.Comment(text=(tmp[1:]).strip())
+                basegeo.append(comment)
+
+            # We are including some type of file.
+            elif "_FILENAME" in odb[lineno]:
+                # We want either a gdb, obj, or odb file
+                if "GDB_FILENAME" in odb[lineno]:
+                    geotype = xml.etree.ElementTree.SubElement(basegeo, "gdb")
+                elif "OBJ_FILENAME" in odb[lineno]:
+                    geotype = xml.etree.ElementTree.SubElement(basegeo, "obj")
+                elif "ODB_FILENAME" in odb[lineno]:
+                    geotype = xml.etree.ElementTree.SubElement(basegeo, "odb")
+                else:
+                    msg = "At line " + str(lineno) + "\nUnsupported geometry type."
+                    raise RuntimeError(msg)
+
+                # add the filename
+                filename = xml.etree.ElementTree.SubElement(geotype, "filename")
+                filename.text = get_right_of_equals(odb[lineno])
+
+            # Add units
+            elif "UNITS" in odb[lineno]:
+                if "CENTIMETERS" in odb[lineno]:
+                    # this needs to come before meters since meters is in
+                    # centimeters
+                    units = "centimeters"
+                elif "METERS" in odb[lineno]:
+                    units = "meters"
+                    # consider using pass here since the default is meters
+                elif "FEET" in odb[lineno]:
+                    units = "feet"
+                elif "INCHES" in odb[lineno]:
+                    units = "inches"
+                else:
+                    msg = "At line " + str(lineno) + "\nUnsupported units."
+                    raise RuntimeError(msg)
+
+            # we have found a set of instances
+            elif "INSTANCES" in odb[lineno]:
+                # get the instance(s)
+                run2 = True
+                while run2:
+                    lineno += 1
+
+                    # ignore empty lines
+                    if len(odb[lineno].strip()) == 0:
+                        pass
+
+                    # stop running
+                    elif "}" in odb[lineno]:
+                        run2 = False
+
+                    # we found a comment
+                    elif "#" in odb[lineno]:
+                        tmp = odb[lineno]
+                        comment = xml.etree.ElementTree.Comment(\
+                            text=(tmp[1:]).strip())
+                        obj.append(comment)
+
+                    # We have found an info
+                    elif "INFO" in odb[lineno]:
+                        obj.append(odb_parseinfo(odb[lineno], lineno, \
+                            build_all_instances=build_all_instances))
+
+                    else:
+                        msg = "At line " + str(lineno) + "\n" + \
+                            "There should be an INFO here."
+                        raise RuntimeError(msg)
+
+            # Add the units to the geotype.
+            # This was moved to allow for units to appear before the filename.
+            if units:
+                geotype.set("units", units)
+
+        return obj, lineno
+
+    except Exception, e:
+        raise
+
+
+def odb_sphere2glist(odb, lineno):
+    try:
+        # verify that we are a sphere
+        if "SPHERE" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a SPHERE primitive." + \
+                odb[lineno]
+            raise RuntimeError(msg)
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        sphere = xml.etree.ElementTree.SubElement(basegeo, "sphere")
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(sphere, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "CENTER" in odb[lineno]:
+                center = xml.etree.ElementTree.SubElement(sphere, "center")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                center.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_IDS" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(sphere, "matid")
+                matid.text = get_right_of_equals(odb[lineno])
+            else:
+                msg = "At line " + str(lineno) + ",\n" + \
+                    "Unexpected line in SPHERE primitive." + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        # add a static instance with no parameters!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, "staticinstance")
+
+        return primitive, lineno
+
+    except Exception, e:
+        raise
+
+
+def odb_groundplane2glist(odb, lineno):
+    try:
+        if "GROUND_PLANE" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a GROUND_PLANE primitive." + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        groundplane = xml.etree.ElementTree.SubElement(basegeo, "groundplane")
+        while run:
+            lineno += 1
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "ANCHOR" in odb[lineno]:
+                anchor = xml.etree.ElementTree.SubElement(groundplane, "anchor")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                anchor.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_ID" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(groundplane, "matid")
+                matid.text = get_right_of_equals(odb[i])
+            elif "ADD_CHECKS" in odb[lineno]:
+                run2 = True
+                while run2:
+                    lineno += 1
+                    checkers = xml.etree.ElementTree.SubElement(groundplane, "checkers")
+                    if i >= len(odb):
+                        run2 = False
+                    elif len(odb[lineno].strip()) == 0:
+                        pass
+                    elif "}" in odb[lineno]:
+                        run2 = False
+                    elif "MATERIAL_ID" in odb[lineno]:
+                        checkers.set("matid", get_right_of_equals(odb[lineno]))
+                    elif "WIDTH" in odb[i]:
+                        checkers.set("width", get_right_of_equals(odb[lineno]))
+                    else:
+                        msg = "At line " + str(lineno) + ":\n" + \
+                            "I do not know what to do with this line in " + \
+                            "GROUND_PLANE:ADD_CHECKS\n" + \
+                            odb[lineno]
+                        raise RuntimeError(msg)
+
+            else:
+                msg = "At line " + str(lineno) + ":\n" + \
+                    "Unexpected line in GROUND_PLANE primitive" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        # add a static instance with no parameters!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, \
+            "staticinstance")
+
+        return primitive, lineno
+
+    except Exception, e:
+        raise
+
+
+def odb_secchidisk2glist(odb, lineno):
+    """
+    """
+    try:
+        if "SECCHI_DISK" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a SECCHI_DISK primitive.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        secchidisk = xml.etree.ElementTree.SubElement(basegeo, "secchidisk")
+
+        # secchidisk locations are in the static instance part of the glist!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, \
+            "staticinstance")
+
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(secchidisk, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "CENTER" in odb[lineno]:
+                translation = xml.etree.ElementTree.SubElement(staticinstance, \
+                    "translation")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                translation.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_IDS" in odb[lineno]:
+                matid_a = xml.etree.ElementTree.SubElement(secchidisk, "matid_a")
+                matid_b = xml.etree.ElementTree.SubElement(secchidisk, "matid_b")
+                tmp = (get_right_of_equals(odb[lineno])).split(",")
+                matid_a.text = (tmp[0]).strip()
+                matid_b.text = (tmp[1]).strip()
+            else:
+                msg = "At line " + str(lineno) + ":\n" + \
+                    "Unexpected line in SECCHI_DISK primitive" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        return primitive, lineno
+    except Exception, e:
+        raise
+
+
+def odb_disk2glist(odb, lineno):
+    try:
+        if "DISK" not in odb[lineno] or "SECCHI" in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a DISK primitive.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        disk = xml.etree.ElementTree.SubElement(basegeo, "disk")
+
+        # disk locations are in the static instance part of the glist!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, \
+            "staticinstance")
+
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(disk, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "CENTER" in odb[lineno]:
+                translation = xml.etree.ElementTree.SubElement(staticinstance, \
+                    "translation")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                translation.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_ID" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(disk, "matid")
+                matid.text = get_right_of_equals(odb[lineno])
+            else:
+                msg = "At line " + str(lineno) + ":\n" + \
+                    "Unexpected line in DISK primitive\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        return primitive, lineno
+
+    except Exception, e:
+        raise
+
+
+def odb_box2glist(odb, lineno):
+    try:
+        if "BOX" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a BOX primitive.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        box = xml.etree.ElementTree.SubElement(basegeo, "box")
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "LOWER_EXTENT" in odb[lineno]:
+                lowerextent = xml.etree.ElementTree.SubElement(box, "lowerextent")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                lowerextent.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "UPPER_EXTENT" in odb[lineno]:
+                upperextent = xml.etree.ElementTree.SubElement(box, "upperextent")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                upperextent.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_IDS" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(box, "matid")
+                matid.text = get_right_of_equals(odb[lineno])
+            else:
+                msg = "At line " + str(lineno) + ":\n" + \
+                    "Unexpected line in BOX primitive\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        # add a static instance with no parameters!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, \
+            "staticinstance")
+
+        return primitive, lineno
+    except Exception, e:
+        raise
+
+
+def odb_cylinder2glist(odb, lineno):
+    """
+    """
+    try:
+        if "CYLINDER" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a CYLINDER primitive.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        cylinder = xml.etree.ElementTree.SubElement(basegeo, "cylinder")
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "POINT_A" in odb[lineno]:
+                point_a = xml.etree.ElementTree.SubElement(cylinder, "point_a")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                point_a.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "POINT_B" in odb[lineno]:
+                point_b = xml.etree.ElementTree.SubElement(cylinder, "point_b")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                point_b.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "MATERIAL_ID" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(cylinder, "matid")
+                matid.text = get_right_of_equals(odb[lineno])
+            elif "RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(cylinder, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "CAP_A" in odb[lineno]:
+                tmp = get_right_of_equals(odb[lineno])
+                if tmp.lower() == "true":
+                    cylinder.set("cap_a", "true")
+                elif tmp.lower() == "false":
+                    cylinder.set("cap_a", "false")
+                else:
+                    msg = "At line " + str(lineno) + ",\n" + \
+                        "Unexpect CAP_A option: " + tmp
+                    raise RuntimeError(msg)
+            elif "CAP_B" in odb[lineno]:
+                tmp = get_right_of_equals(odb[lineno])
+                if tmp.lower() == "true":
+                    cylinder.set("cap_b", "true")
+                elif tmp.lower() == "false":
+                    cylinder.set("cap_b", "false")
+                else:
+                    msg = "At line " + str(lineno) + ",\n" + \
+                        "Unexpect CAP_B option: " + tmp
+                    raise RuntimeError(msg)
+
+            else:
+                msg = "At line " + str(lineno) + ",\n" + \
+                    "Unexpected line in CYLINDER primitive.\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+
+        # add a static instance with no parameters!
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, "staticinstance")
+
+        return primitive, lineno
+    except Exception, e:
+        raise
+
+
+def odb_curvedfrustum2glist(odb, lineno):
+    try:
+        if "CURVED_FRUSTUM" not in odb[lineno]:
+            msg = "At line " + str(lineno) + ",\n" + \
+                "Not a CYLINDER primitive.\n" + \
+                odb[lineno]
+            raise RuntimeError(msg)
+
+
+        run = True
+        primitive = xml.etree.ElementTree.Element("object")
+        basegeo = xml.etree.ElementTree.SubElement(primitive, "basegeometry")
+        curvedfrustum = xml.etree.ElementTree.SubElement(basegeo, "curvedfrustum")
+
+        # add bottom and top
+        bottom = xml.etree.ElementTree.SubElement(curvedfrustum, "bottom")
+        top = xml.etree.ElementTree.SubElement(curvedfrustum, "top")
+
+        # add a static instance
+
+        staticinstance = xml.etree.ElementTree.SubElement(primitive, \
+            "staticinstance")
+
+        while run:
+            lineno += 1
+
+            if lineno >= len(odb):
+                run = False
+            elif len(odb[lineno].strip()) == 0:
+                pass
+            elif "}" in odb[lineno]:
+                run = False
+            elif "HEIGHT" in odb[lineno]:
+                height = xml.etree.ElementTree.SubElement(curvedfrustum, "height")
+                height.text = get_right_of_equals(odb[lineno])
+            elif "CENTER" in odb[lineno]:
+                translation = xml.etree.ElementTree.SubElement(staticinstance, \
+                    "translation")
+                tmp = get_right_of_equals(odb[lineno])
+                tmp = tmp.split(",")
+                translation.append(xyz2point(tmp[0], tmp[1], tmp[2]))
+            elif "BOTTOM_WIDTH_X" in odb[lineno]:
+                xwidth = xml.etree.ElementTree.SubElement(bottom, "xwidth")
+                xwidth.text = get_right_of_equals(odb[lineno])
+            elif "BOTTOM_WIDTH_Y" in odb[lineno]:
+                ywidth = xml.etree.ElementTree.SubElement(bottom, "ywidth")
+                ywidth.text = get_right_of_equals(odb[lineno])
+            elif "MATERIAL_ID" in odb[lineno]:
+                matid = xml.etree.ElementTree.SubElement(curvedfrustum, "matid")
+                matid.text = get_right_of_equals(odb[i])
+            elif "TOP_RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(top, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "BOTTOM_RADIUS" in odb[lineno]:
+                radius = xml.etree.ElementTree.SubElement(bottom, "radius")
+                radius.text = get_right_of_equals(odb[lineno])
+            elif "ROTATE" in odb[lineno]:
+                msg = "At line " + str(lineno) + ",\n" + \
+                    "I have no idea how to handle a rotate in a glist file.\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+            elif "RAMP" in odb[i]:
+                msg = "At line " + str(lineno) + ",\n" + \
+                    "I have no idea how to handle a ramp in a glist file.\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+            else:
+                msg = "At line " + str(lineno) + ",\n" + \
+                    "Unexpected line in CURVED_FRUSTUM primitive.\n" + \
+                    odb[lineno]
+                raise RuntimeError(msg)
+        return primitive, lineno
+
+    except Exception, e:
+        raise
+
+
 def odb2glist(inputfile, outputfile=None, build_all_instances=False):
     """ Converts an odb file to a glist file.
 
@@ -176,662 +872,101 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False):
     REFERENCES:
 
     """
-    # set the output filename if it is not set
-    if not outputfile:
-        tmp = os.path.splitext(inputfile)
-        outputfile = tmp[0] + ".glist"
 
-    # read the odb
-    fid = open(inputfile, "r")
-    odb = [tmp for tmp in fid.readlines()]
-    fid.close()
-
-    # remove newlines and spaces
-    odb = [tmp.strip() for tmp in odb]
-
-    # Make sure that "DIRSIG_ODB" is in the first line of the file
-    if "DIRSIG_ODB" not in odb[0]:
-        # todo: use exceptions
-        print "At line", 1, " in ", inputfile, ":"
-        print "The file is not a valid odb file"
-        return False
-
-    geomtetrylist = ET.Element("geometrylist")
-    geomtetrylist.set("enabled", "true")
-
-    i = 1
-    # loop through each line of the file
-    while i < len(odb):
-        if len(odb[i]) == 0:
-            # ignore empty lines!
-            pass
-
-        elif "#" in odb[i]:
-            # we are a comment.
-            tmp = odb[i]
-            comment = ET.Comment(text=(tmp[1:]).strip())
-            geomtetrylist.append(comment)
-
-        elif "OBJECT" in odb[i]:
-            # we are an object
-
-            # set up the xml to handle an object
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            units = None
-
-            run1 = True
-            while run1:
-
-                i += 1
-
-                # Should not need this case, probably should remove
-                if i >= len(odb):
-                    run1 = False
-
-                # Skip any empty lines
-                elif len(odb[i]) == 0:
-                    pass
-
-                # stop running if the closing bracket is found
-                elif "}" in odb[i]:
-                    run1 = False
-
-                # we have a comment
-                elif "#" in odb[i]:
-                    # assume we are a comment
-                    tmp = odb[i]
-                    comment = ET.Comment(text=(tmp[1:]).strip())
-                    basegeo.append(comment)
-
-                # We are including some type of file.
-                elif "_FILENAME" in odb[i]:
-                    # We want either a gdb, obj, or odb file
-                    if "GDB_FILENAME" in odb[i]:
-                        geotype = ET.SubElement(basegeo, "gdb")
-                    elif "OBJ_FILENAME" in odb[i]:
-                        geotype = ET.SubElement(basegeo, "obj")
-                    elif "ODB_FILENAME" in odb[i]:
-                        geotype = ET.SubElement(basegeo, "odb")
-                    else:
-                        # some other type of file.
-                        print "at line", i + 1, " in ", inputfile, ":"
-                        print "unsupported geometry type"
-                        return False
-
-                    # add the filename
-                    filename = ET.SubElement(geotype, "filename")
-                    filename.text = get_right_of_equals(odb[i])
-
-                # Add units
-                elif "UNITS" in odb[i]:
-                    if "CENTIMETERS" in odb[i]:
-                        # this needs to come before meters since meters is in
-                        # centimeters
-                        units = "centimeters"
-                    elif "METERS" in odb[i]:
-                        units = "meters"
-                        # consider using pass here since the default is meters
-                    elif "FEET" in odb[i]:
-                        units = "feet"
-                    elif "INCHES" in odb[i]:
-                        units = "inches"
-                    else:
-                        print "at line", i + 1, " in ", inputfile, ":"
-                        print "unsupported units"
-                        return False
-
-                # we have found a set of instances
-                elif "INSTANCES" in odb[i]:
-                    # Make sure that the filename has been set.
-                    if not isValidObject:
-                        print "at line", i + 1, " in ", inputfile, ":"
-                        print "We have not defined a file yet, how can we have instances?"
-                        return False
-
-                    # get the instance(s)
-                    run2 = True
-                    while run2:
-                        i += 1
-
-                        # ignore empty lines
-                        if len(odb[i]) == 0:
-                            pass
-
-                        # stop running
-                        elif "}" in odb[i]:
-                            run2 = False
-
-                        # we found a comment
-                        elif "#" in odb[i]:
-                            tmp = odb[i]
-                            comment = ET.Comment(text=(tmp[1:]).strip())
-                            obj.append(comment)
-
-                        # Some line I don't know how to handle
-                        elif "INFO" not in odb[i]:
-                            print "at line", i + 1, " in ", inputfile, ":"
-                            print "there should be an INFO here"
-                            print odb[i]
-                            return False
-
-                        # We have found an info
-                        else:
-                            line = get_right_of_equals(odb[i])
-
-                            # a dynamic instance controlled by a mov file
-                            if ".mov" in line:
-                                # we are a dynamic instance
-                                # Do I need to worry about ppd files? or is that a glist feature?
-
-                                di = ET.SubElement(obj, "dynamicinstance")
-                                kfm = ET.SubElement(di, "keyframemovement")
-                                filename = ET.SubElement(kfm, "filename")
-                                filename.text = line
-
-                            # we are either a 9-ple or 16-ple that is comma separated
-                            elif "," in line:
-
-                                # separate by comma
-                                line = line.split(",")
-
-                                # remove whitespace
-                                line = [tmp.strip() for tmp in line]
-
-                                # check that we are valid (that we have 9 or 16 elements)
-                                if len(line) == 9:
-                                    # we are a 9-ple
-
-                                    # make a static instance
-                                    si = ET.SubElement(obj, "staticinstance")
-
-                                    if (float(line[0]) != 0.0) or \
-                                    (float(line[1]) != 0.0) or \
-                                    (float(line[2]) != 0.0) or \
-                                    build_all_instances:
-
-                                        # make a translation
-                                        translation = ET.SubElement(si, "translation")
-                                        point = ET.SubElement(translation, "point")
-                                        x = ET.SubElement(point, "x")
-                                        x.text = (line[0]).strip()
-                                        y = ET.SubElement(point, "y")
-                                        y.text = (line[1]).strip()
-                                        z = ET.SubElement(point, "z")
-                                        z.text = (line[2]).strip()
-
-                                    if (float(line[3]) == 0.0) or \
-                                        (float(line[4]) == 0.0) or \
-                                        (float(line[5]) == 0.0):
-                                        print "at line", i + 1, " in ", inputfile, ":"
-                                        print "glist files only support non-zero scales"
-                                        return False
-
-                                    elif (float(line[3]) != 1.0) or \
-                                        (float(line[4]) != 1.0) or \
-                                        (float(line[5]) != 1.0) or \
-                                        build_all_instances:
-
-                                        # make a scale
-                                        scale = ET.SubElement(si, "scale")
-                                        ct = ET.SubElement(scale, "cartesiantriple")
-                                        x = ET.SubElement(ct, "x")
-                                        x.text = (line[3]).strip()
-                                        y = ET.SubElement(ct, "y")
-                                        y.text = (line[4]).strip()
-                                        z = ET.SubElement(ct, "z")
-                                        z.text = (line[5]).strip()
-
-                                    if (float(line[6]) != 0.0) or \
-                                    (float(line[7]) != 0.0) or \
-                                    (float(line[8]) != 0.0) or \
-                                    build_all_instances:
-
-                                        # make a rotation
-                                        rotation = ET.SubElement(si, "rotation")
-                                        ct = ET.SubElement(rotation, "cartesiantriple")
-                                        x = ET.SubElement(ct, "x")
-                                        x.text = (line[6]).strip()
-                                        y = ET.SubElement(ct, "y")
-                                        y.text = (line[7]).strip()
-                                        z = ET.SubElement(ct, "z")
-                                        z.text = (line[8]).strip()
-                                elif len(line) == 16:
-                                    # we are a 16-ple
-
-                                    # make a static instance
-                                    si = ET.SubElement(obj, "staticinstance")
-
-                                    # make a matrix
-                                    matrix = ET.SubElement(si, "matrix")
-                                    matrix.text = ", ".join(line)
-                                else:
-                                    print "at line", i + 1, " in ", inputfile, ":"
-                                    print "I am not sure how to parse the line:"
-                                    print ",".join(line)
-                                    print "I was expecting either 9 or 16 comma separated values"
-                                    return False
-
-                            else:
-                                # assume 4x4 affine matrix, split by white space
-                                # can I have a space separated 9-ple here?
-                                l = re.compile(r"\s+")
-                                tmp = l.split(line)
-                                if len(tmp) != 16:
-                                    # we expect 16 elements in this line
-                                    print "at line", i + 1, " in ", inputfile, ":"
-                                    print "I do not understand the instance info:"
-                                    print " ".join(tmp)
-                                    print "I was expecting 16 numbers separated by spaces"
-                                    return False
-
-                                # convert to xml (requires values be comma separated)
-                                # make a static instance
-                                si = ET.SubElement(obj, "staticinstance")
-                                matrix = ET.SubElement(si, "matrix")
-                                matrix.text = ", ".join(tmp)
-
-                # Add the units to the geotype.
-                # This was moved to allow for units to appear before the filename.
-                if units:
-                    geotype.set("units", units)
-
-        # we are a sphere primitive
-        elif "SPHERE" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            sphere = ET.SubElement(basegeo, "sphere")
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "RADIUS" in odb[i]:
-                    radius = ET.SubElement(sphere, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "CENTER" in odb[i]:
-                    center = ET.SubElement(sphere, "center")
-                    point = ET.SubElement(center, "point")
-                    tmp = get_right_of_equals(odb[i])
-                    tmp = tmp.split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_IDS" in odb[i]:
-                    matid = ET.SubElement(sphere, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                else:
-                    print "at line", i + 1, " in ", inputfile, ":"
-                    print "Unexpected line in SPHERE primitive"
-                    print odb[i]
-                    return False
-
-            # add a static instance with no parameters!
-
-            si = ET.SubElement(obj, "staticinstance")
-
-        # we are a ground plane primitive
-        elif "GROUND_PLANE" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            groundplane = ET.SubElement(basegeo, "groundplane")
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "ANCHOR" in odb[i]:
-                    anchor = ET.SubElement(groundplane, "anchor")
-                    point = ET.SubElement(anchor, "point")
-                    tmp = get_right_of_equals(odb[i])
-                    tmp = tmp.split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_ID" in odb[i]:
-                    matid = ET.SubElement(groundplane, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                elif "ADD_CHECKS" in odb[i]:
-                    run3 = True
-                    while run3:
-                        i += 1
-                        checkers = ET.SubElement(groundplane, "checkers")
-                        if i >= len(odb):
-                            run3 = False
-                        elif len(odb[i]) == 0:
-                            pass
-                        elif "}" in odb[i]:
-                            run3 = False
-                        elif "MATERIAL_ID" in odb[i]:
-                            checkers.set("matid", get_right_of_equals(odb[i]))
-                        elif "WIDTH" in odb[i]:
-                            checkers.set("width", get_right_of_equals(odb[i]))
-                        else:
-                            print "at line", i + 1, " in ", \
-                                inputfile, ":"
-                            print "I do not know what to do with this line in " + \
-                                "GROUND_PLANE:ADD_CHECKS"
-                            print odb[i]
-
-                else:
-                    print "Unexpected line in GROUND_PLANE primitive"
-                    print odb[i]
-                    return False
-
-            # add a static instance with no parameters!
-
-            si = ET.SubElement(obj, "staticinstance")
-
-        # we are a Secchi disk primitive
-        elif "SECCHI_DISK" in odb[i]:
-            # SECCHI_DISK mush appear before DISK to make this work!
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            secchidisk = ET.SubElement(basegeo, "secchidisk")
-
-            # secchidisk locations are in the static instance part of the glist!
-            si = ET.SubElement(obj, "staticinstance")
-
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "RADIUS" in odb[i]:
-                    radius = ET.SubElement(secchidisk, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "CENTER" in odb[i]:
-                    translation = ET.SubElement(si, "translation")
-                    point = ET.SubElement(translation, "point")
-                    tmp = get_right_of_equals(odb[i])
-                    tmp = tmp.split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_IDS" in odb[i]:
-                    matid_a = ET.SubElement(secchidisk, "matid_a")
-                    matid_b = ET.SubElement(secchidisk, "matid_b")
-                    tmp = (get_right_of_equals(odb[i])).split(",")
-                    matid_a.text = (tmp[0]).strip()
-                    matid_b.text = (tmp[1]).strip()
-                else:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "Unexpected line in DISK primitive"
-                    print odb[i]
-                    return False
-
-        # we are a disk primitive
-        elif "DISK" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            disk = ET.SubElement(basegeo, "disk")
-
-            # disk locations are in the static instance part of the glist!
-            si = ET.SubElement(obj, "staticinstance")
-
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "RADIUS" in odb[i]:
-                    radius = ET.SubElement(disk, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "CENTER" in odb[i]:
-                    translation = ET.SubElement(si, "translation")
-                    point = ET.SubElement(translation, "point")
-                    tmp = get_right_of_equals(odb[i])
-                    tmp = tmp.split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_ID" in odb[i]:
-                    matid = ET.SubElement(disk, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                else:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "Unexpected line in DISK primitive"
-                    print odb[i]
-                    return False
-
-        # we are a box primitive
-        elif "BOX" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            box = ET.SubElement(basegeo, "box")
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "LOWER_EXTENT" in odb[i]:
-                    lowerextent = ET.SubElement(box, "lowerextent")
-                    point = ET.SubElement(lowerextent, "point")
-                    tmp = (get_right_of_equals(odb[i])).split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "UPPER_EXTENT" in odb[i]:
-                    upperextent = ET.SubElement(box, "upperextent")
-                    point = ET.SubElement(upperextent, "point")
-                    tmp = (get_right_of_equals(odb[i])).split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_IDS" in odb[i]:
-                    matid = ET.SubElement(box, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                else:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "Unexpected line in BOX primitive"
-                    print odb[i]
-                    return False
-
-            # add a static instance with no parameters!
-
-            si = ET.SubElement(obj, "staticinstance")
-
-        # we are a cylinder primitive
-        elif "CYLINDER" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            cylinder = ET.SubElement(basegeo, "cylinder")
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "POINT_A" in odb[i]:
-                    point_a = ET.SubElement(cylinder, "point_a")
-                    point = ET.SubElement(point_a, "point")
-                    tmp = (get_right_of_equals(odb[i])).split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "POINT_B" in odb[i]:
-                    point_b = ET.SubElement(cylinder, "point_b")
-                    point = ET.SubElement(point_b, "point")
-                    tmp = (get_right_of_equals(odb[i])).split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "MATERIAL_ID" in odb[i]:
-                    matid = ET.SubElement(cylinder, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                elif "RADIUS" in odb[i]:
-                    radius = ET.SubElement(cylinder, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "CAP_A" in odb[i]:
-                    tmp = get_right_of_equals(odb[i])
-                    if tmp.lower() == "true":
-                        cylinder.set("cap_a", "true")
-                    elif tmp.lower() == "false":
-
-                        cylinder.set("cap_a", "false")
-                    else:
-                        print "Unexpect CAP_A option: " + tmp
-                elif "CAP_B" in odb[i]:
-                    tmp = get_right_of_equals(odb[i])
-                    if tmp.lower() == "true":
-                        cylinder.set("cap_b", "true")
-                    elif tmp.lower() == "false":
-
-                        cylinder.set("cap_b", "false")
-                    else:
-                        print "Unexpect CAP_A option: " + tmp
-
-                else:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "Unexpected line in CYLINDER primitive"
-                    print odb[i]
-                    return False
-
-            # add a static instance with no parameters!
-
-            si = ET.SubElement(obj, "staticinstance")
-
-        # we are a curved frustum primitive
-        elif "CURVED_FRUSTUM" in odb[i]:
-            run2 = True
-            obj = ET.SubElement(geomtetrylist, "object")
-            basegeo = ET.SubElement(obj, "basegeometry")
-            curvedfrustum = ET.SubElement(basegeo, "curvedfrustum")
-
-            # add bottom and top
-            bottom = ET.SubElement(curvedfrustum, "bottom")
-            top = ET.SubElement(curvedfrustum, "top")
-
-            # add a static instance
-
-            si = ET.SubElement(obj, "staticinstance")
-
-            while run2:
-                i += 1
-
-                if i >= len(odb):
-                    run2 = False
-                elif len(odb[i]) == 0:
-                    pass
-                elif "}" in odb[i]:
-                    run2 = False
-                elif "HEIGHT" in odb[i]:
-                    height = ET.SubElement(curvedfrustum, "height")
-                    height.text = get_right_of_equals(odb[i])
-                elif "CENTER" in odb[i]:
-                    translation = ET.SubElement(si, "translation")
-                    point = ET.SubElement(translation, "point")
-                    tmp = get_right_of_equals(odb[i])
-                    tmp = tmp.split(",")
-                    x = ET.SubElement(point, "x")
-                    x.text = (tmp[0]).strip()
-                    y = ET.SubElement(point, "y")
-                    y.text = (tmp[1]).strip()
-                    z = ET.SubElement(point, "z")
-                    z.text = (tmp[2]).strip()
-                elif "BOTTOM_WIDTH_X" in odb[i]:
-                    xwidth = ET.SubElement(bottom, "xwidth")
-                    xwidth.text = get_right_of_equals(odb[i])
-                elif "BOTTOM_WIDTH_Y" in odb[i]:
-                    ywidth = ET.SubElement(bottom, "ywidth")
-                    ywidth.text = get_right_of_equals(odb[i])
-                elif "MATERIAL_ID" in odb[i]:
-                    matid = ET.SubElement(curvedfrustum, "matid")
-                    matid.text = get_right_of_equals(odb[i])
-                elif "TOP_RADIUS" in odb[i]:
-                    radius = ET.SubElement(top, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "BOTTOM_RADIUS" in odb[i]:
-                    radius = ET.SubElement(bottom, "radius")
-                    radius.text = get_right_of_equals(odb[i])
-                elif "ROTATE" in odb[i]:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "I have no idea how to handle a rotate in a glist file"
-                elif "RAMP" in odb[i]:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "I have no idea how to handle a ramp in a glist file"
-
-                else:
-                    print "at line", i + 1, " in ", \
-                        inputfile, ":"
-                    print "Unexpected line in CURVED_FRUSTUM primitive"
-                    print odb[i]
-                    return False
-
-        else:
-            print "at line", i + 1, " in ", inputfile, ":"
-            print "'" + (odb[i]).strip() + "' is an unsupported odb option"
+    try:
+        # set the output filename if it is not set
+        if not outputfile:
+            tmp = os.path.splitext(inputfile)
+            outputfile = tmp[0] + ".glist"
+
+        # read the odb
+        fid = open(inputfile, "r")
+        odb = [tmp for tmp in fid.readlines()]
+        fid.close()
+
+        # remove newlines and spaces
+        odb = [tmp.strip() for tmp in odb]
+
+        # Make sure that "DIRSIG_ODB" is in the first line of the file
+        if "DIRSIG_ODB" not in odb[0]:
+            # todo: use exceptions
+            print "At line", 1, " in ", inputfile, ":"
+            print "The file is not a valid odb file"
             return False
 
-        # read the next line
-        i += 1
+        geomtetrylist = xml.etree.ElementTree.Element("geometrylist")
+        geomtetrylist.set("enabled", "true")
 
-    # write the glist file
-    fid = open(outputfile, "w")
-    # use prettify to make more human-readable xml
-    fid.write(prettify(geomtetrylist))
-    fid.close()
+        i = 1
+        # loop through each line of the file
+        while i < len(odb):
+            if len(odb[i].strip()) == 0:
+                # ignore empty lines!
+                pass
 
-    return True
+            elif "#" in odb[i]:
+                # we are a comment.
+                tmp = odb[i]
+                comment = xml.etree.ElementTree.Comment(text=(tmp[1:]).strip())
+                geomtetrylist.append(comment)
+
+            elif "OBJECT" in odb[i]:
+                obj, i = odb_object2glist(odb, i, \
+                    build_all_instances=build_all_instances)
+                geomtetrylist.append(obj)
+
+            # we are a sphere primitive
+            elif "SPHERE" in odb[i]:
+                obj, i = odb_sphere2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a ground plane primitive
+            elif "GROUND_PLANE" in odb[i]:
+                obj, i = odb_groundplane2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a Secchi disk primitive
+            elif "SECCHI_DISK" in odb[i]:
+                obj, i = odb_secchidisk2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a disk primitive
+            elif "DISK" in odb[i]:
+                obj, i = odb_disk2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a box primitive
+            elif "BOX" in odb[i]:
+                obj, i = odb_box2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a cylinder primitive
+            elif "CYLINDER" in odb[i]:
+                obj, i = odb_cylinder2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            # we are a curved frustum primitive
+            elif "CURVED_FRUSTUM" in odb[i]:
+                obj, i = odb_curvedfrustum2glist(odb, i)
+                geomtetrylist.append(obj)
+
+            else:
+                msg = "At line " + str(i) + ",\n" + \
+                    "'" + (odb[i]).strip() + "' is an unsupported odb option.\n"
+                raise RuntimeError(msg)
+
+            # read the next line
+            i += 1
+
+        # write the glist file
+        fid = open(outputfile, "w")
+        # use prettify to make more human-readable xml
+        fid.write(prettify(geomtetrylist))
+        fid.close()
+
+        return True
+    except Exception, e:
+        raise
 
 
 
