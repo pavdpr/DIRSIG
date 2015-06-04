@@ -55,10 +55,16 @@ HISTORY:
     - Separated components into separate functions.
     - Added exceptions.
 
+    2015-06-04: Paul Romanczyk
+    - Added ability to change options from command line.
+    - Changed case of variables in __main__ to make pylint happier.
+    - Added a comment say which file this was made from to help track down any
+      bugs.
+    - Added an exception if DIRSIG_ODB is not the first line of the odb file.
+    - Fixed a few bugs from the refactoring of the code.
+    - Added more usefull exception messages.
+
     TODO:
-    - Allow for the user to choose the output filename.
-    - Add the ability to fully define an instance from command line.
-        + default is to only populate the non-standard items.
     - Add recursive functionality to convert any sub-odb files to glists.
 
 KNOWN ISSUES:
@@ -103,6 +109,7 @@ REFERENCES:
 
 
 # import other packages
+import datetime
 import os
 import re
 import sys
@@ -144,16 +151,13 @@ def get_right_of_equals(line):
     """ Returns the text to the right of an equals.
 
     DESCRIPTION:
+        Get the text to the right of an equals sign.
 
     KEYWORD ARGUMENTS:
+        line (str): the line to search.
 
     RETURNS:
-
-    NOTES:
-
-    TODO:
-
-    REFERENCES:
+        str: the text to the right of an equals sign.
 
     """
     tmpline = line.split("=")
@@ -179,8 +183,6 @@ def xyz2point(x_loc, y_loc, z_loc):
     NOTES:
         x_loc, y_loc, and z_loc only need to be convertable to a str. There are
         not any checks to see that they are valid point values.
-
-    TODO:
 
     REFERENCES:
 
@@ -213,8 +215,6 @@ def xyz2cartesiantriple(x_loc, y_loc, z_loc):
         x_loc, y_loc, and z_loc only need to be convertable to a str. There are
         not any checks to see that they are valid cartesiantriple values.
 
-    TODO:
-
     REFERENCES:
 
     """
@@ -228,11 +228,30 @@ def xyz2cartesiantriple(x_loc, y_loc, z_loc):
     return cartesiantriple
 
 
-def odb_parseinfo(line, lineno, build_all_instances=False):
+def odb_parseinfo(line, build_all_instances=False):
+    """ Converts an odb instance info into glist format.
+
+    DESCRIPTION:
+        Converts an odb instance info into a glist format.
+
+    KEYWORD ARGUMENTS:
+        line (str): the line to convert. "INFO" is expected to be part of the
+            line.
+        build_all_instances (bool, optional): A flag to tell the converter to
+            fully defined static instance. The default is False. If false, the
+            minimum static instance will be used. This is only applied to objects
+            and not primatives.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the instance.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid instance.
+
+    """
     try:
         if "INFO" not in line:
-            msg = "At line " + str(lineno) + "\n" + \
-                "There should be an INFO here"
+            msg = "There should be an INFO here"
             raise RuntimeError(msg)
 
         line = get_right_of_equals(line)
@@ -272,8 +291,7 @@ def odb_parseinfo(line, lineno, build_all_instances=False):
 
                 if (float(line[3]) == 0.0) or (float(line[4]) == 0.0) or \
                     (float(line[5]) == 0.0):
-                    msg = "At line " + str(lineno) + "\n" + \
-                        "glist files only support non-zero scales."
+                    msg = "Glist files only support non-zero scales."
                     raise RuntimeError(msg)
 
                 elif (float(line[3]) != 1.0) or (float(line[4]) != 1.0) or \
@@ -300,8 +318,7 @@ def odb_parseinfo(line, lineno, build_all_instances=False):
                 matrix = xml.etree.ElementTree.SubElement(info, "matrix")
                 matrix.text = ", ".join(line)
             else:
-                msg = "At line " + str(lineno) + "\n" + \
-                    "I am not sure how to parse the line.\n" + \
+                msg = "I am not sure how to parse the line.\n" + \
                     "I was expecting either 9 or 16 comma separated values"
                 raise RuntimeError(msg)
 
@@ -312,8 +329,7 @@ def odb_parseinfo(line, lineno, build_all_instances=False):
             tmp = regex.split(line)
             if len(tmp) != 16:
                 # we expect 16 elements in this line
-                msg = "At line " + str(lineno) + "\n" + \
-                    "I am not sure how to parse the line.\n" + \
+                msg = "I am not sure how to parse the line.\n" + \
                     "I was expecting either 16 space separated values"
                 raise RuntimeError(msg)
 
@@ -323,11 +339,32 @@ def odb_parseinfo(line, lineno, build_all_instances=False):
             matrix = xml.etree.ElementTree.SubElement(info, "matrix")
             matrix.text = ", ".join(tmp)
         return info
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_object2glist(odb, lineno, build_all_instances=False):
+    """ Converts an odb object to glist format
+
+    DESCRIPTION:
+        Converts an odb file into the equivalent glist file. This is to facilitate
+        make use of the additional features that are available from glist files.
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a object is read.
+        lineno (int): the line of odb to start from.
+        build_all_instances (bool, optional): A flag to tell the converter to
+            fully defined static instance. The default is False. If false, the
+            minimum static instance will be used. This is only applied to objects
+            and not primatives.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the object.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid object.
+
+    """
     try:
         if "OBJECT" not in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
@@ -421,9 +458,13 @@ def odb_object2glist(odb, lineno, build_all_instances=False):
 
                     # We have found an info
                     elif "INFO" in odb[lineno]:
-                        obj.append(odb_parseinfo(odb[lineno], lineno, \
-                            build_all_instances=build_all_instances))
-
+                        # used a separate try to add file line info
+                        try:
+                            obj.append(odb_parseinfo(odb[lineno], \
+                                build_all_instances=build_all_instances))
+                        except Exception, exception:
+                            raise RuntimeError('At line ' + str(lineno) + \
+                                ':\n' + exception.message)
                     else:
                         msg = "At line " + str(lineno) + "\n" + \
                             "There should be an INFO here."
@@ -436,11 +477,29 @@ def odb_object2glist(odb, lineno, build_all_instances=False):
 
         return obj, lineno
 
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_sphere2glist(odb, lineno):
+    """ Converts an odb sphere to a glist sphere.
+
+    DESCRIPTION:
+        Converts an odb sphere to a glist sphere. The first line of the odb file
+        that is read is expected to contain "SPHERE".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a sphere object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the sphere.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid sphere object.
+
+    """
+
     try:
         # verify that we are a sphere
         if "SPHERE" not in odb[lineno]:
@@ -483,11 +542,29 @@ def odb_sphere2glist(odb, lineno):
 
         return primitive, lineno
 
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_groundplane2glist(odb, lineno):
+    """ Converts an odb ground plane to a glist ground plane.
+
+    DESCRIPTION:
+        Converts an odb ground plane to a glist sphere. The first line of the odb
+        file that is read is expected to contain "GROUND_PLANE".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a groundplane object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the groundplane.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid groundplane object.
+
+    """
+
     try:
         if "GROUND_PLANE" not in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
@@ -514,13 +591,13 @@ def odb_groundplane2glist(odb, lineno):
                 anchor.append(xyz2point(tmp[0], tmp[1], tmp[2]))
             elif "MATERIAL_ID" in odb[lineno]:
                 matid = xml.etree.ElementTree.SubElement(groundplane, "matid")
-                matid.text = get_right_of_equals(odb[i])
+                matid.text = get_right_of_equals(odb[lineno])
             elif "ADD_CHECKS" in odb[lineno]:
                 run2 = True
                 while run2:
                     lineno += 1
                     checkers = xml.etree.ElementTree.SubElement(groundplane, "checkers")
-                    if i >= len(odb):
+                    if lineno >= len(odb):
                         run2 = False
                     elif len(odb[lineno].strip()) == 0:
                         pass
@@ -528,7 +605,7 @@ def odb_groundplane2glist(odb, lineno):
                         run2 = False
                     elif "MATERIAL_ID" in odb[lineno]:
                         checkers.set("matid", get_right_of_equals(odb[lineno]))
-                    elif "WIDTH" in odb[i]:
+                    elif "WIDTH" in odb[lineno]:
                         checkers.set("width", get_right_of_equals(odb[lineno]))
                     else:
                         msg = "At line " + str(lineno) + ":\n" + \
@@ -549,12 +626,27 @@ def odb_groundplane2glist(odb, lineno):
 
         return primitive, lineno
 
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_secchidisk2glist(odb, lineno):
-    """
+    """ Converts an odb secchi disk to a glist secchi disk.
+
+    DESCRIPTION:
+        Converts an odb secchi disk to a glist secchi disk. The first line of the
+        odb file that is read is expected to contain "SECCHI_DISK".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a secchi disk object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the secchi disk.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid secchi disk object.
+
     """
     try:
         if "SECCHI_DISK" not in odb[lineno]:
@@ -603,11 +695,28 @@ def odb_secchidisk2glist(odb, lineno):
                 raise RuntimeError(msg)
 
         return primitive, lineno
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_disk2glist(odb, lineno):
+    """ Converts an odb disk to a glist disk.
+
+    DESCRIPTION:
+        Converts an odb disk to a glist disk. The first line of the odb file
+        that is read is expected to contain "DISK", but not "SECCHI".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a disk object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the disk.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid disk object.
+
+    """
     try:
         if "DISK" not in odb[lineno] or "SECCHI" in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
@@ -652,11 +761,28 @@ def odb_disk2glist(odb, lineno):
 
         return primitive, lineno
 
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_box2glist(odb, lineno):
+    """ Converts an odb box to a glist box.
+
+    DESCRIPTION:
+        Converts an odb box to a glist box. The first line of the odb file that
+        is read is expected to contain "BOX".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a box object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the box.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid box object.
+
+    """
     try:
         if "BOX" not in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
@@ -701,12 +827,27 @@ def odb_box2glist(odb, lineno):
             "staticinstance")
 
         return primitive, lineno
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_cylinder2glist(odb, lineno):
-    """
+    """ Converts an odb cylinder to a cylinder disk.
+
+    DESCRIPTION:
+        Converts an odb cylinder to a glist cylinder. The first line of the odb
+        file that is read is expected to contain "CYLINDER".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a cylinder object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the cylinder.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid cylinder object.
+
     """
     try:
         if "CYLINDER" not in odb[lineno]:
@@ -775,11 +916,34 @@ def odb_cylinder2glist(odb, lineno):
         staticinstance = xml.etree.ElementTree.SubElement(primitive, "staticinstance")
 
         return primitive, lineno
-    except Exception, e:
+    except Exception:
         raise
 
 
 def odb_curvedfrustum2glist(odb, lineno):
+    """ Converts an odb curved frustum to a glist secchi disk.
+
+    DESCRIPTION:
+        Converts an odb curved frustum to a glist curved frustum. The first line
+        of the odb file that is read is expected to contain "CURVED_FRUSTUM".
+
+    KEYWORD ARGUMENTS:
+        odb (list of str): the file from which a curved frustum object is read.
+        lineno (int): the line of odb to start from.
+
+    RETURNS:
+        xml.etree.ElementTree.Element: the glist version of the curved frustum.
+
+    EXCEPTIONS:
+        RuntimeError: if not a valid curved frustum object.
+
+    NOTES:
+        Although defined in the odb version of the curved frustum, the ROTATE and
+        RAMP parameters are not mentioned in the glist documentation, and not
+        implimented. An exception will be thrown if they are included in the odb
+        file.
+
+    """
     try:
         if "CURVED_FRUSTUM" not in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
@@ -828,7 +992,7 @@ def odb_curvedfrustum2glist(odb, lineno):
                 ywidth.text = get_right_of_equals(odb[lineno])
             elif "MATERIAL_ID" in odb[lineno]:
                 matid = xml.etree.ElementTree.SubElement(curvedfrustum, "matid")
-                matid.text = get_right_of_equals(odb[i])
+                matid.text = get_right_of_equals(odb[lineno])
             elif "TOP_RADIUS" in odb[lineno]:
                 radius = xml.etree.ElementTree.SubElement(top, "radius")
                 radius.text = get_right_of_equals(odb[lineno])
@@ -840,7 +1004,7 @@ def odb_curvedfrustum2glist(odb, lineno):
                     "I have no idea how to handle a rotate in a glist file.\n" + \
                     odb[lineno]
                 raise RuntimeError(msg)
-            elif "RAMP" in odb[i]:
+            elif "RAMP" in odb[lineno]:
                 msg = "At line " + str(lineno) + ",\n" + \
                     "I have no idea how to handle a ramp in a glist file.\n" + \
                     odb[lineno]
@@ -852,24 +1016,40 @@ def odb_curvedfrustum2glist(odb, lineno):
                 raise RuntimeError(msg)
         return primitive, lineno
 
-    except Exception, e:
+    except Exception:
         raise
 
 
-def odb2glist(inputfile, outputfile=None, build_all_instances=False):
+def odb2glist(inputfile, outputfile=None, build_all_instances=False, \
+    add_metadata=True):
     """ Converts an odb file to a glist file.
 
     DESCRIPTION:
+        Converts an odb file into the equivalent glist file. This is to facilitate
+        make use of the additional features that are available from glist files.
 
     KEYWORD ARGUMENTS:
+        inputfile (str): The filename of the file to read. Include any path
+            information as needed.
+        outputfile (str, optional), The filename of the file to write. Include any
+            path information as needed. If outputfile is None, than the output
+            file will be the same as the input odb file, but with a .glist
+            extension.
+        build_all_instances (bool, optional): A flag to tell the converter to
+            fully defined static instance. The default is False. If false, the
+            minimum static instance will be used. This is only applied to objects
+            and not primatives.
+        add_metadata (bool, optional): A flag to tell the converter to add a
+            comment to the output glist file. The comment contains the filename
+            (with absolute path) of the input file, a time stamp for when the
+            conversion took place, and that odb2glist.py was used. This is to help
+            track down any discrepancy in the two files.
 
     RETURNS:
+        bool: True if the file was successfully converted.
 
-    NOTES:
-
-    TODO:
-
-    REFERENCES:
+    OUTPUTS:
+        A glist file (name dependent on the value of outputfile) will be written.
 
     """
 
@@ -890,12 +1070,21 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False):
         # Make sure that "DIRSIG_ODB" is in the first line of the file
         if "DIRSIG_ODB" not in odb[0]:
             # todo: use exceptions
-            print "At line", 1, " in ", inputfile, ":"
-            print "The file is not a valid odb file"
-            return False
+            msg = "At line 1 in %s: The file is not a valid odb file" % \
+                inputfile
+            raise RuntimeError(msg)
 
         geomtetrylist = xml.etree.ElementTree.Element("geometrylist")
         geomtetrylist.set("enabled", "true")
+
+        if add_metadata:
+            # Add a comment to the glist about where and when the file was
+            # converted. This is to help track down original files incase bugs
+            # come up. We are using abspath to help disambiguate files.
+            cmt = "Converted from: " + os.path.abspath(inputfile) + " at " + \
+                datetime.datetime.now().isoformat() + " by odb2glist.py"
+            comment = xml.etree.ElementTree.Comment(cmt)
+            geomtetrylist.append(comment)
 
         i = 1
         # loop through each line of the file
@@ -965,53 +1154,54 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False):
         fid.close()
 
         return True
-    except Exception, e:
-        raise
+    except Exception, exception:
+        raise RuntimeError('In ' + inputfile + \
+            ':\n' + exception.message)
 
 
 
 if __name__ == "__main__":
     # set defaults
-    inputfile = ''
-    outputfile = ''
-    build_all_instances = False
+    INPUTFILE = ''
+    OUTPUTFILE = ''
+    BUILD_ALL_INSTANCES = False
 
     # get the command line input
-    args = sys.argv
+    ARGS = sys.argv
 
-    if "odb2glist.py" in args[0]:
-        args.pop(0)
+    if "odb2glist.py" in ARGS[0]:
+        ARGS.pop(0)
 
     # todo: use exceptions
-    if not args:
-        msg = "No inputs from odb2glist.\n" + \
+    if not ARGS:
+        MSG = "No inputs from odb2glist.\n" + \
             "Usage: odb2glist.py [options] filename.odb\n"
-        sys.exit(msg)
+        sys.exit(MSG)
 
     # get the inputfile name (always last argument)
     # TODO: make this work if the user has spaces in the filename.
-    tmp = args[-1]
+    INPUTFILE = ARGS[-1]
 
     # make sure the file exists
-    if not os.path.isfile(tmp):
-        sys.exit("'" + tmp + "' is not a file.")
-    inputfile = tmp
+    if not os.path.isfile(INPUTFILE):
+        sys.exit("'" + INPUTFILE + "' is not a file.")
 
-    # read any optional arguments
-    # TODO: Actually do this!
-    i = 0
-    while i <= (len(args) - 2):
+    I = 0
+    while I <= (len(ARGS) - 2):
         # future options here
-        if args[i] == "":
-            pass
+        if ARGS[I] == '-o':
+            OUTPUTFILE = ARGS[I+1]
+            I += 2
+        elif ARGS[I] == '-f':
+            BUILD_ALL_INSTANCES = True
+            I += 1
         else:
-            sys.exit("The option '" + args[i] + "' is not defined")
-        i += 1
+            sys.exit("'" + str(ARGS[I]) + "' is not a valid option.")
 
     # set the output filename if it is not set
-    if not outputfile:
-        tmp = os.path.splitext(inputfile)
-        outputfile = tmp[0] + ".glist"
+    if not OUTPUTFILE:
+        TMP = os.path.splitext(INPUTFILE)
+        OUTPUTFILE = TMP[0] + ".glist"
 
-    status = odb2glist(inputfile, outputfile=outputfile, \
-        build_all_instances=build_all_instances)
+    STATUS = odb2glist(INPUTFILE, outputfile=OUTPUTFILE, \
+        build_all_instances=BUILD_ALL_INSTANCES)
