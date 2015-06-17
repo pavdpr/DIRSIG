@@ -19,6 +19,11 @@ USE:
     This assumes that odb2glist.py is in your PATH. The default output will be
     a glist file in the same directory as the odb file.
 
+    The options are:
+    -f: Allow for overwriting an existing glist file.
+    -a: Build full object instances, instead of the minimum amount
+    -o outputfilename.glist: set the output filename.
+
 HISTORY:
     2014-06-01: Paul Romanczyk
     - Initial version.
@@ -64,7 +69,14 @@ HISTORY:
     - Fixed a few bugs from the refactoring of the code.
     - Added more usefull exception messages.
 
-    TODO:
+    2015-06-17: Paul Romanczyk
+    - Fixed a bug where the command line running would not work if there was a
+    symbolic link make to odb2glist.py with the name odb2glist.
+    - Made user use -f from command-line or force=True from API to overwrite an
+    existing file.
+    - Added try block around command-line odb2glist call.
+
+TODO:
     - Add recursive functionality to convert any sub-odb files to glists.
 
 KNOWN ISSUES:
@@ -75,6 +87,8 @@ WARNINGS:
     - DIRSIG before 4.6.0 will not allow a negative scale on a glist [4].
     - This does not (currently) recursively change included odb files to
     glist files.
+    - If filename.glist and filename.odb exist in the same directory,
+    filename.glist will be overwritten.
 
 LICENSE:
     The MIT License (MIT)
@@ -470,6 +484,9 @@ def odb_object2glist(odb, lineno, build_all_instances=False):
                             "There should be an INFO here."
                         raise RuntimeError(msg)
 
+            else:
+                msg = "At line " + str(lineno) + "\nUnknown option."
+                raise RuntimeError(msg)
             # Add the units to the geotype.
             # This was moved to allow for units to appear before the filename.
             if units:
@@ -1021,7 +1038,7 @@ def odb_curvedfrustum2glist(odb, lineno):
 
 
 def odb2glist(inputfile, outputfile=None, build_all_instances=False, \
-    add_metadata=True):
+    add_metadata=True, force=False):
     """ Converts an odb file to a glist file.
 
     DESCRIPTION:
@@ -1044,6 +1061,8 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False, \
             (with absolute path) of the input file, a time stamp for when the
             conversion took place, and that odb2glist.py was used. This is to help
             track down any discrepancy in the two files.
+        force (bool, optional): A flag to tell the converter to overwrite an
+            existing glist file. The default is False (do not overwrite).
 
     RETURNS:
         bool: True if the file was successfully converted.
@@ -1058,6 +1077,10 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False, \
         if not outputfile:
             tmp = os.path.splitext(inputfile)
             outputfile = tmp[0] + ".glist"
+
+        if os.path.isfile(outputfile) and not force:
+            msg = outputfile + " already exists. Run with force on to overwrite."
+            raise RuntimeError(msg)
 
         # read the odb
         fid = open(inputfile, "r")
@@ -1155,21 +1178,21 @@ def odb2glist(inputfile, outputfile=None, build_all_instances=False, \
 
         return True
     except Exception, exception:
-        raise RuntimeError('In ' + inputfile + \
+        raise RuntimeError('From ' + os.path.abspath(inputfile) + \
             ':\n' + exception.message)
 
 
 
 if __name__ == "__main__":
     # set defaults
-    INPUTFILE = ''
     OUTPUTFILE = ''
     BUILD_ALL_INSTANCES = False
+    FORCE = False
 
     # get the command line input
     ARGS = sys.argv
 
-    if "odb2glist.py" in ARGS[0]:
+    if "odb2glist" in ARGS[0]:
         ARGS.pop(0)
 
     # todo: use exceptions
@@ -1193,6 +1216,9 @@ if __name__ == "__main__":
             OUTPUTFILE = ARGS[I+1]
             I += 2
         elif ARGS[I] == '-f':
+            FORCE = True
+            I += 1
+        elif ARGS[I] == '-a':
             BUILD_ALL_INSTANCES = True
             I += 1
         else:
@@ -1203,5 +1229,15 @@ if __name__ == "__main__":
         TMP = os.path.splitext(INPUTFILE)
         OUTPUTFILE = TMP[0] + ".glist"
 
-    STATUS = odb2glist(INPUTFILE, outputfile=OUTPUTFILE, \
-        build_all_instances=BUILD_ALL_INSTANCES)
+    if os.path.isfile(OUTPUTFILE) and not FORCE:
+        MSG = "'" + os.path.abspath(OUTPUTFILE) + \
+            "' already exists. Run with force on to overwrite."
+        sys.exit(MSG)
+
+    # try to covnert the file    
+    try:
+        STATUS = odb2glist(INPUTFILE, outputfile=OUTPUTFILE, \
+            build_all_instances=BUILD_ALL_INSTANCES, force=FORCE)
+    except Exception, E:
+        print E.message
+        sys.exit()
