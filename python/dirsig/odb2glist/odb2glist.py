@@ -76,6 +76,9 @@ HISTORY:
     existing file.
     - Added try block around command-line odb2glist call.
 
+    2015-06-22: Paul Romanczyk
+    - Allowed -af to be used as a single command-line flag instead of -a -f.
+
 TODO:
     - Add recursive functionality to convert any sub-odb files to glists.
 
@@ -518,7 +521,6 @@ def odb_sphere2glist(odb, lineno):
     """
 
     try:
-        # verify that we are a sphere
         if "SPHERE" not in odb[lineno]:
             msg = "At line " + str(lineno) + ",\n" + \
                 "Not a SPHERE primitive." + \
@@ -1215,11 +1217,14 @@ if __name__ == "__main__":
         if ARGS[I] == '-o':
             OUTPUTFILE = ARGS[I+1]
             I += 2
-        elif ARGS[I] == '-f':
-            FORCE = True
-            I += 1
-        elif ARGS[I] == '-a':
-            BUILD_ALL_INSTANCES = True
+        elif ARGS[I][0] == '-' and len(ARGS[I]) > 1:
+            for FLAG in ARGS[I][1:]:
+                if FLAG == 'f':
+                    FORCE = True
+                elif FLAG == 'a':
+                    BUILD_ALL_INSTANCES = True
+                else:
+                    sys.exit("'" + FLAG + "' is not a valid flag.")
             I += 1
         else:
             sys.exit("'" + str(ARGS[I]) + "' is not a valid option.")
