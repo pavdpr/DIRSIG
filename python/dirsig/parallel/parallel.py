@@ -25,6 +25,8 @@ USAGE:
     --logfile=<log file name>   Set the logfile name. The default is log.
     --option=<option>           Set an option to pass to the dirsig executable.
                                 Multiple options need to be passed independantly.
+    --showsims                  Show a list of the sim files found by the regex.
+                                This will NOT run dirsig.                            
 
     Notes:
     - The angle brackets after each of the above options should NOT be included.
@@ -206,6 +208,7 @@ if __name__ == '__main__':
     PROCESSES = 2
     LOGFILE = 'log'
     OPTIONS = None
+    SHOWSIMS = False
 
     import sys
     ARGS = sys.argv[1:]
@@ -233,6 +236,8 @@ if __name__ == '__main__':
                 OPTIONS += ' ' + ARG[9:]
             else:
                 OPTIONS = ARG[9:]
+        elif ARG.lower().startswith('--showsims'):
+            SHOWSIMS = True
         else:
             sys.exit("'" + ARG + "' is an unexpected command line option.")
         I += 1
@@ -240,13 +245,17 @@ if __name__ == '__main__':
     # find some sim files
     SIMS = find_sims_by_regex(re.compile(REGEX), pth=PATH)
 
-    # make dirsig commands
-    CMDS = []
-    for SIM in SIMS:
-        (DIR, SIMFILE) = os.path.split(SIM)
-        CMDS.append(cd_for_run(make_dirsig_command(SIMFILE, options=OPTIONS, \
-            dirsig=DIRSIG, logfile=LOGFILE), pth=DIR, basepath=BASEPATH))
+    if SHOWSIMS:
+        for SIM in SIMS:
+            print SIM
+    else:
+        # make dirsig commands
+        CMDS = []
+        for SIM in SIMS:
+            (DIR, SIMFILE) = os.path.split(SIM)
+            CMDS.append(cd_for_run(make_dirsig_command(SIMFILE, options=OPTIONS, \
+                dirsig=DIRSIG, logfile=LOGFILE), pth=DIR, basepath=BASEPATH))
 
-    # run dirsig
-    parallel_run_dirsig(CMDS, processes=PROCESSES)
+        # run dirsig
+        parallel_run_dirsig(CMDS, processes=PROCESSES)
 
