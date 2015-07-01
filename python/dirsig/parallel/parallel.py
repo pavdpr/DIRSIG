@@ -5,6 +5,45 @@
 Public Repository:
     https://github.com/pavdpr/DIRSIG/
 
+USAGE:
+    python parallel.py [options]    or
+    parallel.py [options]           If execute permissions on parallel.py and it is
+                                    in the path.
+
+    [options] are:
+    --path=<path>               Set the path to search for sim files from. The
+                                default is the path where this command is executed
+                                from.
+    --processes=<number>        Set the number of processes to run simultaneously.
+                                The default is 2.
+    --regex=<regex>             Set the regular expression to search for sim files.
+                                Quotes may be needed around the regular expression
+                                to properly pass it to python. The default is
+                                r'.+\.sim' (all sim files)
+    --dirsig=<dirsig version>   Set the dirsig executable name. The default is
+                                dirsig.
+    --logfile=<log file name>   Set the logfile name. The default is log.
+    --option=<option>           Set an option to pass to the dirsig executable.
+                                Multiple options need to be passed independantly.
+
+    Notes:
+    - The angle brackets after each of the above options should NOT be included.
+    - There should be NO spaces on either side of the equals.
+
+SAMPLE USAGE:
+    parallel.py
+        Runs with all defaults.
+
+    parallel.py --path=/some/path --dirsig=dirsig-4.7.0 --processes=8
+        Searches for all sim files in /some/path and executes dirsig-4.7.0 on 8
+        cores.
+
+    parallel.py --option=--mode=preview --option=--output_prefix=foobar
+        Runs dirsig in preview mode and with an output prefix of foobar. This runs
+        dirsig --mode=preview --output_prefix=foobar sim.sim &> log
+
+    parallel.py --regex="simulation.*\.sim'
+        Searches for all simulations that match simulation.*\.sim
 """
 
 __author__ = 'Paul Romanczyk'
@@ -61,7 +100,7 @@ def clean_cmd(cmd):
     return re.sub(r'\s{2, }', ' ', cmd).strip(' \t\n\r')
 
 
-def cd_for_run(cmd, pth='.', delim=';'):
+def cd_for_run(cmd, pth='.', delim=';', basepath=None):
     """Modifies the DIRSIG command to change directories.
 
     This will add add a cd command to execute before the dirsig call. After the
@@ -75,6 +114,8 @@ def cd_for_run(cmd, pth='.', delim=';'):
             default is '.'.
         delim (str, optional): The deliminater betwen the cd's and command. The
             default is ';'.
+        basepath (str, optional): A string containing the refence path. If none,
+            basepath will default to os.getcwd().
 
     Notes:
         This should be run from the directory where the main call will be made
@@ -87,14 +128,19 @@ def cd_for_run(cmd, pth='.', delim=';'):
         A string with the new command including the cd commands.
     """
 
-    if os.path.relpath(pth) == '.':
-        return cmd
     try:
         if not os.path.isdir(pth):
-            raise RuntimeError(pth + ' does not exist')
+            raise RuntimeError("The sim path '" + pth + "' does not exist")
+        if not basepath:
+            basepath = os.getcwd()
+        elif not os.path.isdir(basepath):
+            raise RuntimeError("The base path '" + basepath + "' does not exist")
 
-        return clean_cmd('cd ' + pth + delim + ' ' + cmd + delim + ' cd ' + \
-            os.path.relpath(os.getcwd(), pth))
+        if os.path.relpath(basepath, pth) == '.':
+            return cmd
+
+        return clean_cmd('cd ' + os.path.relpath(pth, basepath) + delim + ' ' + \
+            cmd + delim + ' cd ' + os.path.relpath(basepath, pth))
     except RuntimeError, error:
         raise error
 
@@ -152,15 +198,59 @@ def parallel_run_dirsig(cmds, processes=2):
 
 
 if __name__ == '__main__':
+    # set defaults
+    REGEX = r'.+\.sim'
+    DIRSIG = 'dirsig'
+    PATH = '.'
+    BASEPATH = None
+    PROCESSES = 2
+    LOGFILE = 'log'
+    OPTIONS = None
+
+    import sys
+    ARGS = sys.argv[1:]
+
+    REGEXREGEX1 = re.compile(r'regex="(.*)"', re.IGNORECASE)
+    REGEXREGEX2 = re.compile(r"regex='(.*)'", re.IGNORECASE)
+
+    I = 0
+    while I < len(ARGS):
+        ARG = ARGS[I]
+        if ARG.lower().startswith('--path='):
+            PATH = ARG[7:]
+        # elif ARG.lower().startswith('--basepath='):
+        #     BASEPATH = ARG[11:]
+        elif ARG.lower().startswith('--processes='):
+            PROCESSES = int(ARG[12:])
+        elif ARG.lower().startswith('--regex='):
+            REGEX = ARG[8:]#.decode('string_escape')
+        elif ARG.lower().startswith('--dirsig='):
+            DIRSIG = ARG[9:]
+        elif ARG.lower().startswith('--logfile='):
+            LOGFILE = ARG[10:]
+        elif ARG.lower().startswith('--option='):
+            if OPTIONS:
+                OPTIONS += ' ' + ARG[9:]
+            else:
+                OPTIONS = ARG[9:]
+        else:
+            sys.exit("'" + ARG + "' is an unexpected command line option.")
+        I += 1
+
     # find some sim files
-    sims = find_sims_by_regex(re.compile(r'.+\.sim'))
+    SIMS = find_sims_by_regex(re.compile(REGEX), pth=PATH)
 
     # make dirsig commands
-    cmds = []
-    for sim in sims:
-        (d, simfile) = os.path.split(sim)
-        cmds.append(cd_for_run(make_dirsig_command(simfile), pth=d))
+    CMDS = []
+    for SIM in SIMS:
+        (DIR, SIMFILE) = os.path.split(SIM)
+        CMDS.append(\
+            cd_for_run(\
+                make_dirsig_command(SIMFILE, options=OPTIONS, logfile=LOGFILE), \
+                pth=PATH, basepath=BASEPATH))
+
+    print CMDS
 
     # run dirsig
-    parallel_run_dirsig(cmds)
+    parallel_run_dirsig(cmds, processes=PROCESSES)
 
