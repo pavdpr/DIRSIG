@@ -249,8 +249,6 @@ if __name__ == '__main__':
                 make_dirsig_command(SIMFILE, options=OPTIONS, logfile=LOGFILE), \
                 pth=PATH, basepath=BASEPATH))
 
-    print CMDS
-
     # run dirsig
-    parallel_run_dirsig(cmds, processes=PROCESSES)
+    parallel_run_dirsig(CMDS, processes=PROCESSES)
 
