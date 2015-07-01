@@ -247,7 +247,7 @@ if __name__ == '__main__':
         CMDS.append(\
             cd_for_run(\
                 make_dirsig_command(SIMFILE, options=OPTIONS, logfile=LOGFILE), \
-                pth=PATH, basepath=BASEPATH))
+                pth=DIR, basepath=BASEPATH))
 
     # run dirsig
     parallel_run_dirsig(CMDS, processes=PROCESSES)
