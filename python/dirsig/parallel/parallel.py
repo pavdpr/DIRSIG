@@ -244,10 +244,8 @@ if __name__ == '__main__':
     CMDS = []
     for SIM in SIMS:
         (DIR, SIMFILE) = os.path.split(SIM)
-        CMDS.append(\
-            cd_for_run(\
-                make_dirsig_command(SIMFILE, options=OPTIONS, logfile=LOGFILE), \
-                pth=DIR, basepath=BASEPATH))
+        CMDS.append(cd_for_run(make_dirsig_command(SIMFILE, options=OPTIONS, \
+            dirsig=DIRSIG, logfile=LOGFILE), pth=DIR, basepath=BASEPATH))
 
     # run dirsig
     parallel_run_dirsig(CMDS, processes=PROCESSES)
