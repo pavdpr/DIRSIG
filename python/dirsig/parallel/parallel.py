@@ -21,6 +21,10 @@ USAGE:
                                       regular expression to properly pass it to
                                       python. The default is r'.+\.sim' (all sim
                                       files).
+    --exclude=<regex>               Trim the list of sim files by not processing
+                                      any sim file that matches the regular
+                                      expression.
+    --rmsim=<sim file>              Do not process this sim file.                                      
     --addsim=<sim file>             Add a specific sim file to the list of sims to
                                       run. These sim files will be earlier in the
                                       list to run.                                  
@@ -71,6 +75,9 @@ try:
     import multiprocessing
     __HAS_MULTIPROCESSING__ = True
 except Exception:
+    raise
+    # TODO: get a workaround like subprocess working
+    #import subprocess
     __HAS_MULTIPROCESSING__ = False
 
 import os
@@ -185,24 +192,34 @@ def cd_for_run(cmd, pth='.', delim=';', basepath=None):
         raise error
 
 
-def remove_duplicate_sim_files(sims):
-    """ Removes duplicate sim files.
+def remove_sim_files(sims, ommit=[]):
+    """ Removes sim files.
 
     DESCRIPTION:
-        Removes duplicate sim files by checking the absolute path of each.
+        Removes sim files. There are 3 sets of sim files that will be removed:
+        1. sim files in the iterable ommit.
+        2. sim files that are duplicates of ones already processed.
+        3. sim files that do not exist on disk.
 
     ARGS:
-        sims (iterable of str): An iterable of paths to sim files.
+        sims (iterable of str): An iterable of sim files.
+        ommit (iterable of str): An iterable of sim files to ommit.
 
     RETURNS:
         list of str: A list of sim files with no duplicates.
     """
     tmpset = set()
+    # prepopulate with files that we want to ommit
+    for f in ommit:
+        tmpset.add(os.path.abspath(f))
     output = []
+
+    # remove sim files
     for sim in sims:
         if os.path.abspath(sim) not in tmpset:
-            output.append(sim)
-            tmpset.add(os.path.abspath(sim))
+            tmpset.add(sim)
+            if os.path.isfile(sim):
+                output.append(os.path.abspath(sim))
     return output
 
 
@@ -258,8 +275,8 @@ def parallel_run_dirsig(cmds, processes=2):
         if processes != 1:
             print "WARNING: multiprocessing package is not installed."
             print "\tOnly one process will be exectuted at a time."
-        for cmd in cmds:
-            os.system(cmd)
+        # for cmd in cmds:
+        #     subprocess.Popen(cmd)
 
     return
 
@@ -268,6 +285,7 @@ if __name__ == '__main__':
     # set defaults
     SEARCH_REGEX = []
     EXCLUDE_REGEX = []
+    EXCLUDE_FILES = []
     SIMS = []
     DIRSIG = 'dirsig'
     PATH = '.'
@@ -302,13 +320,15 @@ if __name__ == '__main__':
             LOGFILE = ARG[10:]
         elif ARG.lower().startswith('--addsim='):
             SIMS.append(ARG[9:])
+        elif ARG.lower().startswith('--rmsim='):
+            EXCLUDE_FILES.append(ARG[8:])
         elif ARG.lower().startswith('--option='):
             if OPTIONS:
                 OPTIONS += ' ' + ARG[9:]
             else:
                 OPTIONS = ARG[9:]
-        elif ARG.lower().startswith('--run'):
-            SHOWSIMS = True
+        elif ARG.lower() == '--run':
+            RUN = True
         else:
             sys.exit("'" + ARG + "' is an unexpected command line option.")
         I += 1
@@ -325,7 +345,7 @@ if __name__ == '__main__':
         SIMS = exclude_sims_by_regex(SIMS, re.compile(REGEX))
 
     # Remove duplicate sim files
-    SIMS = remove_duplicate_sim_files(SIMS)    
+    SIMS = remove_sim_files(SIMS, EXCLUDE_FILES)
 
     if not RUN:
         print "dirsig.parallel.parallel.py"
@@ -336,22 +356,29 @@ if __name__ == '__main__':
         print "Found {0} sim files:".format(len(SIMS))
         for SIM in SIMS:
             print "\t{0}".format(SIM)
-        print "To add more simulations add --regex=[regular expression] to " + \
+        print
+        print "To add more simulations add --regex=<regular expression> to " + \
             "your python call."
-        print "To add a specific simulation add --addsim==[sim file] to your " + \
+        print "To add a specific simulation add --addsim=<sim file> to your " + \
             "python call."
-        print "To remove simulations add --exclude=[regular expression] to " + \
+        print "To remove simulations add --exclude=<regular expression> to " + \
+            "your python call."
+        print "To remove a specific simulation add --rmsim=<sim file> to " + \
             "your python call."
         print
         print "The following dirsig call will be performed on each sim file:"
         print "\t{0}".format(make_dirsig_command("*.sim", options=OPTIONS, \
             dirsig=DIRSIG, logfile = LOGFILE))
+        print
         if not __HAS_MULTIPROCESSING__:
             print "WARNING: multiprocessing package is not installed."
-            if processes != 1 :
-                print "\tOnly one process will be exectuted at a time."
+            print "This will not work right now."
+            # if PROCESSES != 1 :
+            #     print "\tOnly one process will be exectuted at a time."
         else:
             print "Executing on {0} cores.".format(PROCESSES)
+            print "To change the number of processes add --processes=<n> to " + \
+                "your python call."
         print 
         print "To run with these settings, use:"
         print "\tpython parallel.py {0} --run".format(" ".join(ARGS))
