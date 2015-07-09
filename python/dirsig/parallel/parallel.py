@@ -11,22 +11,24 @@ USAGE:
                                     in the path.
 
     [options] are:
-    --path=<path>               Set the path to search for sim files from. The
-                                default is the path where this command is executed
-                                from.
-    --processes=<number>        Set the number of processes to run simultaneously.
-                                The default is 2.
-    --regex=<regex>             Set the regular expression to search for sim files.
-                                Quotes may be needed around the regular expression
-                                to properly pass it to python. The default is
-                                r'.+\.sim' (all sim files)
-    --dirsig=<dirsig version>   Set the dirsig executable name. The default is
-                                dirsig.
-    --logfile=<log file name>   Set the logfile name. The default is log.
-    --option=<option>           Set an option to pass to the dirsig executable.
-                                Multiple options need to be passed independantly.
-    --showsims                  Show a list of the sim files found by the regex.
-                                This will NOT run dirsig.                            
+    --path=<path>                   Set the path to search for sim files from. The
+                                    default is the path where this command is
+                                    executed from.
+    --processes=<number>            Set the number of processes to run
+                                    simultaneously. The default is 2.
+    --regex=<regex>                 Set the regular expression to search for sim
+                                    files. Quotes may be needed around the regular
+                                    expression to properly pass it to python. The
+                                    default is r'.+\.sim' (all sim files).
+    --dirsig=<dirsig version>       Set the dirsig executable name. The default is
+                                    dirsig.
+    --logfile=<log file name>       Set the logfile name. The default is log.
+    --option=<option>               Set an option to pass to the dirsig executable.
+                                    Multiple options need to be passed
+                                    independantly.
+    --run                           Run the simulation. Not setting the --run flag
+                                    will show the simulations that would be run.
+                              
 
     Notes:
     - The angle brackets after each of the above options should NOT be included.
@@ -34,17 +36,21 @@ USAGE:
 
 SAMPLE USAGE:
     parallel.py
+        Shows what settings were used. Does NOT execute any runs. Allows the user
+        to review what simulations will be run.
+
+    parallel.py --run
         Runs with all defaults.
 
-    parallel.py --path=/some/path --dirsig=dirsig-4.7.0 --processes=8
+    parallel.py --path=/some/path --dirsig=dirsig-4.7.0 --processes=8 --run
         Searches for all sim files in /some/path and executes dirsig-4.7.0 on 8
         cores.
 
-    parallel.py --option=--mode=preview --option=--output_prefix=foobar
+    parallel.py --option=--mode=preview --option=--output_prefix=foobar --run
         Runs dirsig in preview mode and with an output prefix of foobar. This runs
         dirsig --mode=preview --output_prefix=foobar sim.sim &> log
 
-    parallel.py --regex="simulation.*\.sim'
+    parallel.py --regex="simulation.*\.sim' --run
         Searches for all simulations that match simulation.*\.sim
 """
 
@@ -57,16 +63,22 @@ __maintainer__ = "Paul Romanczyk"
 __email__ = "par4249@rit.edu"
 __status__ = "Production"
 
-import multiprocessing
+try:
+    import multiprocessing
+    __HAS_MULTIPROCESSING__ = True
+except Exception:
+    __HAS_MULTIPROCESSING__ = False
+
 import os
 import re
+
 
 def find_sims_by_regex(regex, pth='.'):
     """Finds sim files in a directory tree by using regular expressions.
 
     Args:
         regex (_sre.SRE_Pattern): The regular expression to use. This should
-        be compiled e.g., re.compile(r'.+sim') which will find all sim files.
+            be compiled e.g., re.compile(r'.+sim') which will find all sim files.
         pth (str, optional): The path to search. The default is '.'.
 
     Returns:
@@ -86,6 +98,28 @@ def find_sims_by_regex(regex, pth='.'):
                 # check if the file and directory matches the regex
                 output.append(os.path.join(root, current_file))
 
+    return output
+
+
+def exclude_sims_by_regex(sims, regex):
+    """Removes sims by using a regular expression.
+
+    DESCRIPTION:
+        Returns all sims that do NOT match the regular expression.
+
+    ARGS:
+        sims (iterable of strings): An iterable of strings contating candidate
+            sim files
+        regex (_sre.SRE_Pattern): The regular expression to use. This should
+            be compiled e.g., re.compile(r'.+sim') which will find all sim files.
+
+    RETURNS:
+        A list of strings that do not match the regular expression.
+    """
+    output = []
+    for sim in sims:
+        if not regex.search(sim):
+            output.append(sim)
     return output
 
 
@@ -146,6 +180,25 @@ def cd_for_run(cmd, pth='.', delim=';', basepath=None):
     except RuntimeError, error:
         raise error
 
+def remove_duplicate_sim_files(sims):
+    """ Removes duplicate sim files.
+
+    DESCRIPTION:
+        Removes duplicate sim files by checking the absolute path of each.
+
+    ARGS:
+        sims (iterable of str): An iterable of paths to sim files.
+
+    RETURNS:
+        list of str: A list of sim files with no duplicates.
+    """
+    tmpset = set()
+    output = []
+    for sim in sims:
+        if os.path.abspath(sim) not in tmpset:
+            output.append(sim)
+            tmpset.add(os.path.abspath(sim))
+    return output
 
 def make_dirsig_command(sim, options=None, dirsig='dirsig', logfile='log'):
     """ Makes a command to rund dirsig.
@@ -192,23 +245,30 @@ def parallel_run_dirsig(cmds, processes=2):
     Returns:
         None
     """
-
-    pool = multiprocessing.Pool(processes=processes)
-    pool.map(os.system, cmds)
+    if __HAS_MULTIPROCESSING__:
+        pool = multiprocessing.Pool(processes=processes)
+        pool.map(os.system, cmds)
+    else:
+        if processes != 1:
+            print "WARNING: multiprocessing package is not installed."
+            print "\tOnly one process will be exectuted at a time."
+        for cmd in cmds:
+            os.system(cmd)
 
     return
 
 
 if __name__ == '__main__':
     # set defaults
-    REGEX = r'.+\.sim'
+    SEARCH_REGEX = []
+    EXCLUDE_REGEX = []
     DIRSIG = 'dirsig'
     PATH = '.'
     BASEPATH = None
     PROCESSES = 2
     LOGFILE = 'log'
     OPTIONS = None
-    SHOWSIMS = False
+    RUN = False
 
     import sys
     ARGS = sys.argv[1:]
@@ -226,7 +286,9 @@ if __name__ == '__main__':
         elif ARG.lower().startswith('--processes='):
             PROCESSES = int(ARG[12:])
         elif ARG.lower().startswith('--regex='):
-            REGEX = ARG[8:]#.decode('string_escape')
+            SEARCH_REGEX.append(ARG[8:])#.decode('string_escape')
+        elif ARG.lower().startswith('--exclude='):
+            EXCLUDE_REGEX.append(ARG[10:])#.decode('string_escape')
         elif ARG.lower().startswith('--dirsig='):
             DIRSIG = ARG[9:]
         elif ARG.lower().startswith('--logfile='):
@@ -236,18 +298,52 @@ if __name__ == '__main__':
                 OPTIONS += ' ' + ARG[9:]
             else:
                 OPTIONS = ARG[9:]
-        elif ARG.lower().startswith('--showsims'):
+        elif ARG.lower().startswith('--run'):
             SHOWSIMS = True
         else:
             sys.exit("'" + ARG + "' is an unexpected command line option.")
         I += 1
 
-    # find some sim files
-    SIMS = find_sims_by_regex(re.compile(REGEX), pth=PATH)
+    if not SEARCH_REGEX:
+        SEARCH_REGEX = [r'.+\.sim']
 
-    if SHOWSIMS:
+    # Find some sim files
+    SIMS = []
+    for REGEX in SEARCH_REGEX:
+        SIMS += find_sims_by_regex(re.compile(REGEX), pth=PATH)
+
+    # Exclude some sim files
+    for REGEX in EXCLUDE_REGEX:
+        SIMS = exclude_sims_by_regex(SIMS, re.compile(REGEX))
+
+    # Remove duplicate sim files
+    SIMS = remove_duplicate_sim_files(SIMS)    
+
+    if not RUN:
+        print "dirsig.parallel.parallel.py"
+        print
+        print "Called from {0}".format(os.getcwd())
+        print "Searching: {0}".format(os.path.abspath(PATH))
+        print
+        print "Found {0} sim files:".format(len(SIMS))
         for SIM in SIMS:
-            print SIM
+            print "\t{0}".format(SIM)
+        print "To add more simulations add --regex=[regular expression] to " + \
+            "your python call."
+        print "To remove simulations add --exclude=[regular expression] to " + \
+            "your python call."
+        print
+        print "Dirsig calls: {0}".format(make_dirsig_command("*.sim", \
+            options=OPTIONS, dirsig=DIRSIG, logfile = LOGFILE))
+        if not __HAS_MULTIPROCESSING__:
+            print "WARNING: multiprocessing package is not installed."
+            if processes != 1 :
+                print "\tOnly one process will be exectuted at a time."
+        else:
+            print "Executing on {0} cores.".format(PROCESSES)
+        print 
+        print "To run with these settings, use:"
+        print "\tpython parallel.py {0} --run".format(" ".join(ARGS))
     else:
         # make dirsig commands
         CMDS = []
