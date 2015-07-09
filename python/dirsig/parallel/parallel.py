@@ -8,31 +8,35 @@ Public Repository:
 USAGE:
     python parallel.py [options]    or
     parallel.py [options]           If execute permissions on parallel.py and it is
-                                    in the path.
+                                      in the path.
 
     [options] are:
     --path=<path>                   Set the path to search for sim files from. The
-                                    default is the path where this command is
-                                    executed from.
+                                      default is the path where this command is
+                                      executed from.
     --processes=<number>            Set the number of processes to run
-                                    simultaneously. The default is 2.
+                                      simultaneously. The default is 2.
     --regex=<regex>                 Set the regular expression to search for sim
-                                    files. Quotes may be needed around the regular
-                                    expression to properly pass it to python. The
-                                    default is r'.+\.sim' (all sim files).
+                                      files. Quotes may be needed around the
+                                      regular expression to properly pass it to
+                                      python. The default is r'.+\.sim' (all sim
+                                      files).
+    --addsim=<sim file>             Add a specific sim file to the list of sims to
+                                      run. These sim files will be earlier in the
+                                      list to run.                                  
     --dirsig=<dirsig version>       Set the dirsig executable name. The default is
-                                    dirsig.
+                                      dirsig.
     --logfile=<log file name>       Set the logfile name. The default is log.
     --option=<option>               Set an option to pass to the dirsig executable.
-                                    Multiple options need to be passed
-                                    independantly.
+                                      Multiple options need to be passed
+                                      independantly.
     --run                           Run the simulation. Not setting the --run flag
-                                    will show the simulations that would be run.
+                                      will show the simulations that would be run.
                               
 
     Notes:
     - The angle brackets after each of the above options should NOT be included.
-    - There should be NO spaces on either side of the equals.
+    - There should not be spaces on either side of the equals.
 
 SAMPLE USAGE:
     parallel.py
@@ -180,6 +184,7 @@ def cd_for_run(cmd, pth='.', delim=';', basepath=None):
     except RuntimeError, error:
         raise error
 
+
 def remove_duplicate_sim_files(sims):
     """ Removes duplicate sim files.
 
@@ -199,6 +204,7 @@ def remove_duplicate_sim_files(sims):
             output.append(sim)
             tmpset.add(os.path.abspath(sim))
     return output
+
 
 def make_dirsig_command(sim, options=None, dirsig='dirsig', logfile='log'):
     """ Makes a command to rund dirsig.
@@ -262,6 +268,7 @@ if __name__ == '__main__':
     # set defaults
     SEARCH_REGEX = []
     EXCLUDE_REGEX = []
+    SIMS = []
     DIRSIG = 'dirsig'
     PATH = '.'
     BASEPATH = None
@@ -293,6 +300,8 @@ if __name__ == '__main__':
             DIRSIG = ARG[9:]
         elif ARG.lower().startswith('--logfile='):
             LOGFILE = ARG[10:]
+        elif ARG.lower().startswith('--addsim='):
+            SIMS.append(ARG[9:])
         elif ARG.lower().startswith('--option='):
             if OPTIONS:
                 OPTIONS += ' ' + ARG[9:]
@@ -308,7 +317,6 @@ if __name__ == '__main__':
         SEARCH_REGEX = [r'.+\.sim']
 
     # Find some sim files
-    SIMS = []
     for REGEX in SEARCH_REGEX:
         SIMS += find_sims_by_regex(re.compile(REGEX), pth=PATH)
 
@@ -330,11 +338,14 @@ if __name__ == '__main__':
             print "\t{0}".format(SIM)
         print "To add more simulations add --regex=[regular expression] to " + \
             "your python call."
+        print "To add a specific simulation add --addsim==[sim file] to your " + \
+            "python call."
         print "To remove simulations add --exclude=[regular expression] to " + \
             "your python call."
         print
-        print "Dirsig calls: {0}".format(make_dirsig_command("*.sim", \
-            options=OPTIONS, dirsig=DIRSIG, logfile = LOGFILE))
+        print "The following dirsig call will be performed on each sim file:"
+        print "\t{0}".format(make_dirsig_command("*.sim", options=OPTIONS, \
+            dirsig=DIRSIG, logfile = LOGFILE))
         if not __HAS_MULTIPROCESSING__:
             print "WARNING: multiprocessing package is not installed."
             if processes != 1 :
