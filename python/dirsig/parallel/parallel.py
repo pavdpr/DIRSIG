@@ -78,12 +78,10 @@ __status__ = "Production"
 
 try:
     import multiprocessing
-    __HAS_MULTIPROCESSING__ = True
+    _HAS_MULTIPROCESSING_ = True
 except Exception:
-    raise
-    # TODO: get a workaround like subprocess working
-    #import subprocess
-    __HAS_MULTIPROCESSING__ = False
+    import subprocess
+    _HAS_MULTIPROCESSING_ = False
 
 import os
 import re
@@ -183,14 +181,15 @@ def cd_for_run(cmd, pth='.', delim=';', basepath=None):
     try:
         if not pth:
             return cmd
-        if not os.path.isdir(pth):
+        elif not os.path.isdir(pth):
             raise RuntimeError("The sim path '" + pth + "' does not exist")
+
         if not basepath:
             basepath = os.getcwd()
         elif not os.path.isdir(basepath):
             raise RuntimeError("The base path '" + basepath + "' does not exist")
 
-        if os.path.relpath(basepath, pth) == '.':
+        if os.path.samefile(basepath, pth):
             return cmd
 
         return clean_cmd('cd ' + os.path.relpath(pth, basepath) + delim + ' ' + \
@@ -275,7 +274,7 @@ def parallel_run_dirsig(cmds, processes=2):
     Returns:
         None
     """
-    if __HAS_MULTIPROCESSING__:
+    if _HAS_MULTIPROCESSING_:
         pool = multiprocessing.Pool(processes=processes)
         pool.map(os.system, cmds)
     else:
@@ -287,6 +286,7 @@ def parallel_run_dirsig(cmds, processes=2):
         if processes != 1:
             print "WARNING: multiprocessing package is not installed."
             print "\tOnly one process will be exectuted at a time."
+
         for cmd in cmds:
             subprocess.call(cmd, shell=True)
 
@@ -382,7 +382,7 @@ if __name__ == '__main__':
         print "\t{0}".format(make_dirsig_command("*.sim", options=OPTIONS, \
             dirsig=DIRSIG, logfile = LOGFILE))
         print
-        if not __HAS_MULTIPROCESSING__:
+        if not _HAS_MULTIPROCESSING_:
             print "WARNING: multiprocessing package is not installed."
             print "This will not work right now."
             # if PROCESSES != 1 :
