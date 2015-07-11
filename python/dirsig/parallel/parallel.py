@@ -60,6 +60,11 @@ SAMPLE USAGE:
 
     parallel.py --regex="simulation.*\.sim' --run
         Searches for all simulations that match simulation.*\.sim
+
+REQUIRED PACKAGES:
+    multiprocessing or subprocess
+    re
+    os
 """
 
 __author__ = 'Paul Romanczyk'
@@ -176,6 +181,8 @@ def cd_for_run(cmd, pth='.', delim=';', basepath=None):
     """
 
     try:
+        if not pth:
+            return cmd
         if not os.path.isdir(pth):
             raise RuntimeError("The sim path '" + pth + "' does not exist")
         if not basepath:
@@ -272,11 +279,16 @@ def parallel_run_dirsig(cmds, processes=2):
         pool = multiprocessing.Pool(processes=processes)
         pool.map(os.system, cmds)
     else:
+        """
+        Run with subprocess. 
+        NOTE: "Invoking the system shell with shell=True can be a security
+        hazard if combinedwith untrusted input."
+        """
         if processes != 1:
             print "WARNING: multiprocessing package is not installed."
             print "\tOnly one process will be exectuted at a time."
-        # for cmd in cmds:
-        #     subprocess.Popen(cmd)
+        for cmd in cmds:
+            subprocess.call(cmd, shell=True)
 
     return
 
