@@ -217,9 +217,9 @@ def remove_sim_files(sims, ommit=[]):
     # remove sim files
     for sim in sims:
         if os.path.abspath(sim) not in tmpset:
-            tmpset.add(sim)
+            tmpset.add(os.path.abspath(sim))
             if os.path.isfile(sim):
-                output.append(os.path.abspath(sim))
+                output.append(os.path.relpath(sim))
     return output
 
 
