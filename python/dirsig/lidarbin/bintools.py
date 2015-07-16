@@ -4,11 +4,11 @@
 
 Usage:
     To read a bin file:
-        binfile = readDirsigBin(filename)
+        binfile = dirsig.lidarbin.readbin(filename)
     To get the true signals:
-        signal = getSignal( binfile )
+        signal = get_signal( binfile )
     To get the range of each time bin for each pulse:
-        range = getBinRange( binfile )
+        range = get_bin_range( binfile )
 
 External Dependancies:
     numpy
